@@ -459,14 +459,9 @@
 					});
 
 					const data = await response.json();
-
-					if (data.is_pending_confirmation) {
-						message.textContent = 'Check your email to confirm!';
-					} else if (data.is_new_sign_up) {
-						message.textContent = "You're #" + data.position + ' on the waitlist!';
-					} else {
-						message.textContent = "You're already on the waitlist!";
-					}
+					message.textContent = data.position
+						? "You're #" + data.position + ' on the waitlist!'
+						: "You're on the list!";
 					message.style.color = '#4ade80';
 					form.reset();
 				} catch (error) {
