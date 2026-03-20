@@ -9,9 +9,9 @@ Rerun is in early development. Join the waitlist for first access.
 To sign up, POST to the waitlist API:
 
 ```
-POST https://waitlister.me/s/mH3Rm3KsAQeo
+POST https://waitlister.me/api/v1/waitlist/mH3Rm3KsAQeo/sign-up
 Content-Type: application/json
-Accept: application/json
+X-Api-Key: wl_ruvzx4imsimmzc8kn3
 
 {"email": "user@example.com"}
 ```

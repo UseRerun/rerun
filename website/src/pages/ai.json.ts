@@ -17,11 +17,11 @@ export const GET: APIRoute = () => {
         id: 'join_waitlist',
         description:
           'Sign up for the Rerun early access waitlist with an email address',
-        endpoint: 'https://waitlister.me/s/mH3Rm3KsAQeo',
+        endpoint: 'https://waitlister.me/api/v1/waitlist/mH3Rm3KsAQeo/sign-up',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          'X-Api-Key': 'wl_ruvzx4imsimmzc8kn3',
         },
         params: {
           email: {

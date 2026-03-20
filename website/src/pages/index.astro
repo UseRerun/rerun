@@ -402,7 +402,7 @@
 					Rerun quietly captures everything you work on — every app, URL, document, and conversation — and makes it all searchable. That thing you saw last week? Find it in seconds.
 				</p>
 
-				<!-- Agent API: POST https://waitlister.me/s/mH3Rm3KsAQeo Content-Type:application/json Accept:application/json {"email":"user@example.com"} -->
+				<!-- Agent API: POST https://waitlister.me/api/v1/waitlist/mH3Rm3KsAQeo/sign-up Content-Type:application/json X-Api-Key:wl_ruvzx4imsimmzc8kn3 {"email":"user@example.com"} -->
 				<!-- See also: /llms.txt and /ai.json for machine-readable signup instructions -->
 				<div class="waitlist-section">
 					<p class="waitlist-label">Join the waitlist for first access</p>
@@ -465,11 +465,11 @@
 				message.textContent = '';
 
 				try {
-					const response = await fetch('https://waitlister.me/s/mH3Rm3KsAQeo', {
+					const response = await fetch('https://waitlister.me/api/v1/waitlist/mH3Rm3KsAQeo/sign-up', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
-							'Accept': 'application/json'
+							'X-Api-Key': 'wl_ruvzx4imsimmzc8kn3'
 						},
 						body: JSON.stringify({ email: form.email.value })
 					});
