@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 2 - Not Started
+## Status: Phase 2 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -42,13 +42,31 @@
 ---
 
 ### Phase 2: SQLite Database Layer
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `DatabaseManager` actor in RerunCore using GRDB DatabasePool
+- [x] Configured WAL mode (automatic with DatabasePool), foreign keys, 5 reader pool
+- [x] Implemented schema migration system via GRDB DatabaseMigrator (version-tracked, eraseDatabaseOnSchemaChange in DEBUG)
+- [x] Created `capture` table with all fields from research
+- [x] Created `capture_fts` FTS5 virtual table with `synchronize(withTable:)` (auto sync triggers)
+- [x] Created `summary` table with period indexes
+- [x] Created `exclusion` table with unique type+value index
+- [x] Defined `Capture` struct: Codable + FetchableRecord + PersistableRecord + typed Columns enum
+- [x] Defined `Summary` and `Exclusion` structs similarly
+- [x] Implemented: insertCapture, fetchCaptures, fetchCapture(id:), captureCount, latestHashForApp, searchCaptures (FTS5 with app/since filters)
+- [x] Implemented: insertSummary, fetchSummaries(periodType:)
+- [x] Implemented: insertExclusion, fetchExclusions, deleteExclusion, exclusionExists
+- [x] Database path: `~/Library/Application Support/Rerun/rerun.db` (via defaultPath())
+- [x] Tests: 11 database tests + 1 existing version test, all passing
 
 #### Decisions Made
-- (none yet)
+- GRDB table names use singular form matching Swift struct names (GRDB convention: `capture` not `captures`)
+- FTS5 uses `synchronize(withTable:)` for automatic insert/update/delete triggers — no manual trigger management
+- `matchingAllPrefixesIn` for FTS5 search patterns — supports partial word matching
+- Test databases use temp files (GRDB DatabasePool requires a file path, no in-memory mode)
+- Actor-based DatabaseManager wraps synchronous GRDB read/write calls
+- All IDs are pre-generated UUIDs (PersistableRecord, not MutablePersistableRecord)
 
 #### Blockers
 - (none)
@@ -246,11 +264,21 @@
 - Astro site with landing page + Resend waitlist integration
 - OSS repo files (README, LICENSE, CONTRIBUTING, AGENTS.md, CLAUDE.md)
 - Pushed to https://github.com/UseRerun/rerun
+- Completed Phase 2: SQLite database layer
+- DatabaseManager actor with GRDB DatabasePool, WAL mode, migrations
+- 3 tables: capture (+ FTS5 index), summary, exclusion
+- 3 model structs with full GRDB protocol conformance
+- CRUD operations: insert, fetch, search (FTS5), count, dedup hash lookup
+- 12 tests passing (schema, insert/fetch, FTS5 search, filtering, ordering, exclusions, summaries)
 
 ---
 
 ## Files Changed
-(Will be updated as implementation progresses)
+- `app/Sources/RerunCore/Models/Capture.swift` (new)
+- `app/Sources/RerunCore/Models/Summary.swift` (new)
+- `app/Sources/RerunCore/Models/Exclusion.swift` (new)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (new)
+- `app/Tests/RerunCoreTests/DatabaseTests.swift` (new)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
