@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 1 - In Progress
+## Status: Phase 2 - Not Started
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -11,17 +11,30 @@
 ## Phase Progress
 
 ### Phase 1: Monorepo Scaffold + Swift Package + Marketing Site
-**Status:** In Progress
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Initialized git repo
+- [x] Created monorepo structure: app/, website/, docs/, research/
+- [x] Swift package with 3 targets: RerunCore (library), RerunCLI (executable), RerunDaemon (executable)
+- [x] GRDB + swift-argument-parser dependencies added and compiling
+- [x] CLI with `rerun status` and `rerun status --json` working
+- [x] Daemon placeholder running with RunLoop
+- [x] Tests passing (RerunCoreTests)
+- [x] Astro site initialized with landing page, blog + changelog content collections
+- [x] Landing page with Waitlister integration
+- [x] OSS files: README.md, LICENSE (AGPL-3.0), CONTRIBUTING.md, AGENTS.md, CLAUDE.md
+- [x] .gitignore for Swift + Node + macOS
+- [x] GitHub repo created: https://github.com/UseRerun/rerun
+- [x] Initial commit pushed to main
 
 #### Decisions Made
-- GitHub org: `usererun/rerun`
-- Waitlist email capture: Waitlister (waitlister.me)
-- Marketing site: Astro SSG
-- Markdown file location: `~/rerun/` (configurable via RERUN_HOME)
-- macOS minimum: 26+ (Tahoe)
+- GitHub org: `usererun/rerun` (UseRerun org)
+- Waitlist: Waitlister (waitlister.me)
+- Marketing site: Astro SSG (minimal template, content collections for blog + changelog)
+- Swift package structure: RerunCore (shared library) + RerunCLI + RerunDaemon
+- Default branch: main
+- CLI uses @main with ArgumentParser subcommands
 
 #### Blockers
 - (none)
@@ -226,7 +239,13 @@
 
 ## Session Log
 
-### (Sessions will be logged as work progresses)
+### 2026-03-20
+- Completed Phase 1: monorepo scaffold
+- Swift package compiles with GRDB + ArgumentParser
+- CLI (rerun status), daemon placeholder, tests all working
+- Astro site with landing page + Waitlister integration
+- OSS repo files (README, LICENSE, CONTRIBUTING, AGENTS.md, CLAUDE.md)
+- Pushed to https://github.com/UseRerun/rerun
 
 ---
 
