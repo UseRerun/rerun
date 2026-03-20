@@ -60,15 +60,6 @@ struct AccessibilityTests {
         let _ = AccessibilityExtractor.isAccessibilityGranted
     }
 
-    @Test func extractReturnsResultOrNilGracefully() {
-        // In a test environment, AX may or may not work depending on permissions
-        // and whether there's a focused window. Either way, no crash.
-        let extractor = AccessibilityExtractor()
-        let result = extractor.extract()
-        if let result {
-            #expect(!result.appName.isEmpty)
-            #expect(result.source == .accessibility)
-        }
-        // nil is also acceptable — no focused window, no permission, etc.
-    }
+    // Integration test (extract from real window) omitted — requires CG session.
+    // Use `swift run rerun-daemon --test-ax` for manual integration testing.
 }

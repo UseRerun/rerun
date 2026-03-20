@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 3 - Completed
+## Status: Phase 4 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -109,13 +109,32 @@
 ---
 
 ### Phase 4: OCR Fallback Pipeline
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `OCRExtractor` in RerunCore/Capture/
+- [x] Implemented `SCScreenshotManager.captureImage()` via ScreenCaptureKit for single-frame window capture
+- [x] Feed image to `VNRecognizeTextRequest` (`.accurate` mode, 0.3 confidence threshold)
+- [x] Extract text from `VNRecognizedTextObservation` results with confidence filtering
+- [x] Concatenate recognized text into a single string (newline-separated)
+- [x] Screenshot image discarded immediately after OCR (never persisted — local variable goes out of scope)
+- [x] Returns same `CaptureResult` structure as A11y extractor (with `source: .ocr`)
+- [x] Screen Recording permission check via `CGPreflightScreenCaptureAccess()` + `requestScreenRecordingIfNeeded()` prompt
+- [x] Created `CaptureOrchestrator` that tries A11y first, falls back to OCR when text < 50 chars
+- [x] Orchestrator merges OCR text with A11y metadata (window title, URL preserved from AX)
+- [x] OCR latency measured and logged via `os.Logger` (subsystem: com.rerun, category: OCRExtractor)
+- [x] `--test-ocr` daemon flag for OCR-only diagnostics
+- [x] `--test-capture` daemon flag for full orchestrator diagnostics
+- [x] 6 new OCR tests, 25 total passing (removed 3 integration tests that crash test runner due to CGS_REQUIRE_INIT — use daemon flags for integration testing)
 
 #### Decisions Made
-- (none yet)
+- **No separate PermissionManager:** Screen Recording permission checks are static methods on `OCRExtractor`, matching the `AccessibilityExtractor` pattern. No need for a separate class.
+- **Window selection:** Filter `SCShareableContent.windows` by matching PID from NSWorkspace, `isOnScreen`, `windowLayer == 0` (normal windows), positive frame dimensions. Takes first match.
+- **Retina handling:** `NSScreen.main?.backingScaleFactor ?? 2.0` for screenshot resolution scaling.
+- **Metadata merging in orchestrator:** OCR text + AX metadata (window title, URL). AX always runs first since it's near-zero cost and provides richer metadata.
+- **Fallback chain:** AX → (if < 50 chars) → OCR → (if both fail) → return AX result even if short → nil.
+- **Integration tests via daemon flags:** `--test-ocr` and `--test-capture` instead of automated tests, since ScreenCaptureKit requires a full CG session that the test runner doesn't have.
+- **showsCursor: false** on SCStreamConfiguration — no mouse cursor in OCR screenshots.
 
 #### Blockers
 - (none)
@@ -297,6 +316,12 @@
 - URL extraction for 11 browser bundles (Safari, Chrome, Arc, Dia, Firefox, etc.)
 - Batch attribute fetching, wall-clock timeout, 50-char minimum threshold
 - 8 new tests, 20 total passing
+- Completed Phase 4: OCR fallback pipeline
+- OCRExtractor: ScreenCaptureKit screenshot → Vision OCR (accurate mode, 0.3 confidence)
+- CaptureOrchestrator: A11y first → OCR fallback with metadata merging
+- Screen Recording permission check/request
+- --test-ocr and --test-capture daemon flags for integration testing
+- 6 new OCR tests, 25 total passing (removed 3 CG-dependent integration tests)
 
 ---
 
@@ -310,6 +335,10 @@
 - `app/Sources/RerunCore/Capture/AccessibilityExtractor.swift` (new)
 - `app/Tests/RerunCoreTests/AccessibilityTests.swift` (new)
 - `app/Sources/RerunDaemon/main.swift` (updated — added --test-ax flag)
+- `app/Sources/RerunCore/Capture/OCRExtractor.swift` (new)
+- `app/Sources/RerunCore/Capture/CaptureOrchestrator.swift` (new)
+- `app/Tests/RerunCoreTests/OCRTests.swift` (new)
+- `app/Sources/RerunDaemon/main.swift` (updated — added --test-ocr and --test-capture flags)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
