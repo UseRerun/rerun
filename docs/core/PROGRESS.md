@@ -22,7 +22,7 @@
 - [x] Daemon placeholder running with RunLoop
 - [x] Tests passing (RerunCoreTests)
 - [x] Astro site initialized with landing page, blog + changelog content collections
-- [x] Landing page with Waitlister integration
+- [x] Landing page with Resend waitlist integration
 - [x] OSS files: README.md, LICENSE (AGPL-3.0), CONTRIBUTING.md, AGENTS.md, CLAUDE.md
 - [x] .gitignore for Swift + Node + macOS
 - [x] GitHub repo created: https://github.com/UseRerun/rerun
@@ -30,7 +30,7 @@
 
 #### Decisions Made
 - GitHub org: `usererun/rerun` (UseRerun org)
-- Waitlist: Waitlister (waitlister.me)
+- Waitlist: Resend (audience API)
 - Marketing site: Astro SSG (minimal template, content collections for blog + changelog)
 - Swift package structure: RerunCore (shared library) + RerunCLI + RerunDaemon
 - Default branch: main
@@ -243,7 +243,7 @@
 - Completed Phase 1: monorepo scaffold
 - Swift package compiles with GRDB + ArgumentParser
 - CLI (rerun status), daemon placeholder, tests all working
-- Astro site with landing page + Waitlister integration
+- Astro site with landing page + Resend waitlist integration
 - OSS repo files (README, LICENSE, CONTRIBUTING, AGENTS.md, CLAUDE.md)
 - Pushed to https://github.com/UseRerun/rerun
 

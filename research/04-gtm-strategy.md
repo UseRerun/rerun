@@ -90,7 +90,7 @@ This is the story your followers invest in:
 
 Launch a waitlist on day 1. Structure:
 - Landing page: one headline, 15-second demo GIF, email capture
-- Referral mechanic: "Move up the list by sharing with friends" (use Waitlister or similar)
+- Referral mechanic: "Move up the list by sharing with friends"
 - Position display: show people their spot in line
 - Drip emails every 2-3 weeks with build-in-public updates
 
