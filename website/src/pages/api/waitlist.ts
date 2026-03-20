@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    const res = await fetch('https://api.resend.com/contacts', {
+    const res = await fetch(`https://api.resend.com/audiences/${SEGMENT_ID}/contacts`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
@@ -26,7 +26,6 @@ export const POST: APIRoute = async ({ request }) => {
       body: JSON.stringify({
         email,
         unsubscribed: false,
-        audience_id: SEGMENT_ID,
       }),
     });
 
