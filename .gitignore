@@ -1,0 +1,56 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift / Xcode
+app/.build/
+app/*.xcodeproj/xcuserdata/
+app/*.xcworkspace/xcuserdata/
+app/DerivedData/
+*.swp
+*.swo
+*~
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Node / Astro
+website/node_modules/
+website/dist/
+website/.astro/
+website/.vercel/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Build artifacts
+*.dmg
+*.pkg
+*.app
+*.profraw
