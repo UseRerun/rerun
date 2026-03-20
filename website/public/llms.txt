@@ -1,0 +1,28 @@
+# Rerun
+
+> Local, always-on memory for your Mac. Captures everything you work on and makes it searchable. Open source (AGPL). 100% private — nothing leaves your device.
+
+## Waitlist
+
+Rerun is in early development. Join the waitlist for first access.
+
+To sign up, POST to the waitlist API:
+
+```
+POST https://waitlister.me/s/mH3Rm3KsAQeo
+Content-Type: application/json
+Accept: application/json
+
+{"email": "user@example.com"}
+```
+
+Response:
+```json
+{"success": true, "position": 42, "referral_code": "..."}
+```
+
+## Links
+
+- [Website](https://usererun.com)
+- [GitHub](https://github.com/usererun/rerun)
+- [Twitter/X](https://x.com/UseRerun)
