@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 2 - Completed
+## Status: Phase 3 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -74,13 +74,34 @@
 ---
 
 ### Phase 3: Accessibility Text Extraction
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `AccessibilityExtractor` in RerunCore/Capture/
+- [x] Implemented PID-based AX element creation (`AXUIElementCreateApplication(pid)`) — more reliable than system-wide → focused app approach
+- [x] Walks the AX element tree (max depth 4, max 30 children per node, 200ms wall-clock deadline)
+- [x] Extracts text from: `kAXValueAttribute`, `kAXTitleAttribute`, `kAXDescriptionAttribute`, `kAXSelectedTextAttribute`
+- [x] Handles different value types: String, NSAttributedString, NSNumber, arrays (recursive flattening)
+- [x] Uses `AXUIElementCopyMultipleAttributeValues` for batch attribute fetching (one IPC call instead of four)
+- [x] Extracts metadata: window title (AX), app name + bundle ID (NSWorkspace)
+- [x] URL extraction: `kAXURLAttribute` for Safari, address bar reading for Chromium/Firefox
+- [x] Browser bundle list: Safari, Chrome, Brave, Edge, Arc, Dia, Firefox, Opera, Vivaldi
+- [x] Created `CaptureResult` struct: text, appName, bundleId, windowTitle, url, source, needsOCRFallback
+- [x] Minimum text threshold (50 chars) — below this, signals OCR fallback needed
+- [x] Permission check: `AXIsProcessTrusted()` + `requestAccessibilityIfNeeded()` with prompt
+- [x] Handles apps with no accessibility gracefully (returns result with needsOCRFallback=true)
+- [x] `--test-ax` debug flag on daemon for manual testing
+- [x] 8 tests: CaptureResult init, OCR fallback flag, text source raw values, threshold, extractor init (default + custom), permission check, extract smoke test
+- [x] All 20 tests passing (12 DB + 8 accessibility)
 
 #### Decisions Made
-- (none yet)
+- **PID-based over system-wide:** `AXUIElementCreateSystemWide()` → `kAXFocusedApplicationAttribute` returned `cannotComplete` (-25204) from CLI context. `AXUIElementCreateApplication(pid)` using NSWorkspace's frontmost PID works reliably.
+- **NSWorkspace for app metadata:** App name + bundle ID from `NSWorkspace.shared.frontmostApplication` — more reliable and simpler than extracting from AX elements.
+- **Set<String> for dedup during tree walk:** Automatically deduplicates extracted text fragments.
+- **Batch attribute fetch:** `AXUIElementCopyMultipleAttributeValues` reduces IPC round-trips from 4 to 1 per element.
+- **1-second IPC timeout:** Set via `AXUIElementSetMessagingTimeout` — default 6s is too long for a capture pipeline.
+- **@unchecked Sendable:** AccessibilityExtractor is a plain final class with immutable config; AX calls block the calling thread. Safe to use from a single capture loop.
+- **String literal for kAXTrustedCheckOptionPrompt:** C global isn't concurrency-safe in Swift 6, using "AXTrustedCheckOptionPrompt" directly.
 
 #### Blockers
 - (none)
@@ -270,6 +291,12 @@
 - 3 model structs with full GRDB protocol conformance
 - CRUD operations: insert, fetch, search (FTS5), count, dedup hash lookup
 - 12 tests passing (schema, insert/fetch, FTS5 search, filtering, ordering, exclusions, summaries)
+- Completed Phase 3: Accessibility text extraction
+- AccessibilityExtractor with PID-based AX element creation + tree walking
+- CaptureResult struct for extraction results
+- URL extraction for 11 browser bundles (Safari, Chrome, Arc, Dia, Firefox, etc.)
+- Batch attribute fetching, wall-clock timeout, 50-char minimum threshold
+- 8 new tests, 20 total passing
 
 ---
 
@@ -279,6 +306,10 @@
 - `app/Sources/RerunCore/Models/Exclusion.swift` (new)
 - `app/Sources/RerunCore/Database/DatabaseManager.swift` (new)
 - `app/Tests/RerunCoreTests/DatabaseTests.swift` (new)
+- `app/Sources/RerunCore/Capture/CaptureResult.swift` (new)
+- `app/Sources/RerunCore/Capture/AccessibilityExtractor.swift` (new)
+- `app/Tests/RerunCoreTests/AccessibilityTests.swift` (new)
+- `app/Sources/RerunDaemon/main.swift` (updated — added --test-ax flag)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
