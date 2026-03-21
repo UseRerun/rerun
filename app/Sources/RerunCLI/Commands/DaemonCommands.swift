@@ -1,4 +1,5 @@
 import ArgumentParser
+import AppKit
 import Foundation
 import RerunCore
 
@@ -33,35 +34,75 @@ struct StartCommand: AsyncParsableCommand {
             return
         }
 
-        // Find rerun-daemon binary as sibling of this executable
         guard let execURL = Bundle.main.executableURL else {
             print("Cannot determine executable path.")
             throw ExitCode(1)
         }
-        let daemonURL = execURL.deletingLastPathComponent().appendingPathComponent("rerun-daemon")
 
-        guard FileManager.default.fileExists(atPath: daemonURL.path) else {
-            print("Daemon binary not found at \(daemonURL.path)")
-            throw ExitCode(1)
+        // Try to find Rerun.app (production mode)
+        let appLocations = [
+            URL(fileURLWithPath: "/Applications/Rerun.app"),
+            execURL.deletingLastPathComponent().appendingPathComponent("Rerun.app"),
+        ]
+
+        var appURL: URL?
+        for location in appLocations {
+            if FileManager.default.fileExists(atPath: location.appendingPathComponent("Contents/MacOS/Rerun").path) {
+                appURL = location
+                break
+            }
         }
 
-        let process = Process()
-        process.executableURL = daemonURL
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        process.qualityOfService = .background
+        if let appURL {
+            // Launch as app bundle for proper TCC identity
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            config.createsNewApplicationInstance = true
 
-        do {
-            try process.run()
-        } catch {
-            print("Failed to start daemon: \(error.localizedDescription)")
-            throw ExitCode(1)
-        }
+            do {
+                try await NSWorkspace.shared.openApplication(at: appURL, configuration: config)
+            } catch {
+                print("Failed to launch Rerun.app: \(error.localizedDescription)")
+                throw ExitCode(1)
+            }
 
-        if formatter.useJSON {
-            try formatter.printJSON(["status": "started", "pid": "\(process.processIdentifier)"])
+            guard let newStatus = await DaemonStartupWaiter.waitUntilRunning() else {
+                print("Rerun.app launched but the daemon never became healthy.")
+                throw ExitCode(1)
+            }
+
+            if formatter.useJSON {
+                try formatter.printJSON(["status": "started", "pid": "\(newStatus.pid ?? 0)"])
+            } else {
+                print("Daemon started (PID \(newStatus.pid ?? 0))")
+            }
         } else {
-            print("Daemon started (PID \(process.processIdentifier))")
+            // Development: fall back to bare daemon binary
+            let daemonURL = execURL.deletingLastPathComponent().appendingPathComponent("rerun-daemon")
+
+            guard FileManager.default.fileExists(atPath: daemonURL.path) else {
+                print("Neither Rerun.app nor rerun-daemon found.")
+                throw ExitCode(1)
+            }
+
+            let process = Process()
+            process.executableURL = daemonURL
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.qualityOfService = .background
+
+            do {
+                try process.run()
+            } catch {
+                print("Failed to start daemon: \(error.localizedDescription)")
+                throw ExitCode(1)
+            }
+
+            if formatter.useJSON {
+                try formatter.printJSON(["status": "started", "pid": "\(process.processIdentifier)"])
+            } else {
+                print("Daemon started (PID \(process.processIdentifier))")
+            }
         }
     }
 }

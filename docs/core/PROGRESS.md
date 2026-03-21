@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 14 - Revised
+## Status: Phase 14.5 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -459,17 +459,35 @@
 ---
 
 ### Phase 14.5: Permission-Safe Auto-Start App Shell
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Dual-mode daemon: detects `.app` bundle via `Bundle.main.bundleIdentifier`, uses `NSApplication` when bundled, `RunLoop.main.run()` when bare
+- [x] `NSApplication.shared.setActivationPolicy(.accessory)` — no Dock icon when running as app
+- [x] `SMAppService.mainApp.register()` — registers as login item for auto-start when running inside `.app` bundle
+- [x] Created `app/bundle.sh` build script: `swift build -c release` → creates `Rerun.app/Contents/{MacOS,Resources,Info.plist}` → Developer ID code signs
+- [x] `Info.plist` with `CFBundleIdentifier: com.rerun.app`, `LSUIElement: true`, `CFBundleExecutable: Rerun`
+- [x] Updated `StartCommand` to find and launch `Rerun.app` via `NSWorkspace.shared.openApplication()` (checks `/Applications/Rerun.app` and sibling directory)
+- [x] Falls back to bare `rerun-daemon` binary launch for development when no `.app` found
+- [x] Updated `DaemonDetector` to check for process name `"Rerun"` (app bundle) first, then `"rerun-daemon"` (dev)
+- [x] `StopCommand` unchanged — SIGTERM via PID file works for both app and bare binary
+- [x] Menu bar status item (`StatusBarController`): eye icon, capture status, pause/resume, privacy settings link, quit
+- [x] All 103 tests passing, zero build warnings
+- [x] Bundle script tested: builds, signs, and produces valid `.app` structure
+- [x] Captures verified flowing in production
 
 #### Decisions Made
-- **Planned direction:** Replace plain LaunchAgent auto-start with a signed macOS app shell (`LSUIElement`) or bundled login item registered via `SMAppService`, so Screen Recording / Accessibility permissions attach to a stable app identity.
-- **CLI role shrinks:** CLI should control the long-running app via IPC/XPC/local socket, not own capture directly when auto-start is enabled.
+- **No new SPM target:** The existing `rerun-daemon` binary works in two modes. When inside a `.app` bundle (detected via `Bundle.main.bundleIdentifier != nil`), it uses `NSApplication` for proper macOS app identity. When bare, it uses `RunLoop.main.run()` as before.
+- **No Xcode project:** A shell script (`bundle.sh`) creates the `.app` bundle structure, copies the release binary, generates `Info.plist`, and signs. SPM can't create `.app` bundles natively, but a 40-line script handles it cleanly.
+- **Developer ID signing required:** Ad-hoc signing (`-s -`) changes the code hash on every build, invalidating TCC (Accessibility/Screen Recording) grants. Developer ID certificate provides a stable identity that persists across rebuilds.
+- **No automatic permission prompting:** Removed `requestAccessibilityIfNeeded()` / `requestScreenRecordingIfNeeded()` from daemon startup. With ad-hoc signing these caused repeated prompts on every launch. Menu bar shows permission status and links to System Settings instead.
+- **No AppDelegate:** `CaptureDaemon` already observes `NSWorkspace` notifications directly. `NSApplication.shared.run()` provides the run loop and app identity without needing delegate callbacks.
+- **CLI binary not in bundle:** The CLI is a separate tool users have in their PATH. The app bundle only needs the daemon binary (renamed as `Rerun` to match `CFBundleExecutable`).
+- **`NSWorkspace.shared.openApplication()` for app launch:** Properly registers the process with the window server and establishes TCC identity, unlike raw `Process()` which inherits parent permissions.
+- **SMAppService non-fatal:** If login item registration fails, the app still runs — just won't auto-start on next login. Logged to stderr.
 
 #### Blockers
-- Need a minimal macOS app target / bundle identity before this phase can start
+- (none)
 
 ---
 

@@ -2,6 +2,7 @@ import RerunCore
 import Foundation
 import AppKit
 import Dispatch
+import ServiceManagement
 
 // Quick AX diagnostic if --test-ax flag is passed
 if CommandLine.arguments.contains("--test-ax") {
@@ -175,4 +176,28 @@ Task { @MainActor in
     }
 }
 
-RunLoop.main.run()
+if Bundle.main.bundleIdentifier != nil {
+    // Running inside .app bundle — register as login item for auto-start
+    let service = SMAppService.mainApp
+    if service.status != .enabled {
+        do {
+            try service.register()
+            print("Registered as login item")
+        } catch {
+            fputs("Login item registration failed: \(error.localizedDescription)\n", stderr)
+        }
+    }
+
+    // Use NSApplication for proper macOS app identity (no Dock icon)
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+
+    // Menu bar status item
+    let statusBar = StatusBarController()
+    statusBar.setup(daemon: daemon)
+
+    app.run()
+} else {
+    // Running as bare binary (development / diagnostics)
+    RunLoop.main.run()
+}

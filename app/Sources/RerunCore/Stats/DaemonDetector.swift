@@ -1,18 +1,49 @@
 import Foundation
 
 public struct DaemonDetector: Sendable {
+    private static let expectedProcessNames = ["Rerun", "rerun-daemon"]
+
     public struct DaemonStatus: Sendable, Equatable {
         public let running: Bool
         public let pid: Int?
+
+        public init(running: Bool, pid: Int?) {
+            self.running = running
+            self.pid = pid
+        }
     }
 
     public static func detect() -> DaemonStatus {
         detect(
             pidFileURL: RerunHome.pidFileURL(),
-            expectedProcessName: "rerun-daemon"
+            expectedProcessNames: expectedProcessNames
         ) {
-            detectViaPgrep(expectedProcessName: "rerun-daemon")
+            detectViaPgrep(expectedProcessNames: expectedProcessNames)
         }
+    }
+
+    static func detect(
+        pidFileURL: URL,
+        expectedProcessNames: [String],
+        fallback: () -> DaemonStatus
+    ) -> DaemonStatus {
+        // Try PID file first
+        if let pidString = try? String(contentsOf: pidFileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+           let pid = Int(pidString) {
+            guard kill(Int32(pid), 0) == 0 else {
+                try? FileManager.default.removeItem(at: pidFileURL)
+                return fallback()
+            }
+
+            if let processName = commandName(for: pid),
+               expectedProcessNames.contains(processName) {
+                return DaemonStatus(running: true, pid: pid)
+            }
+
+            try? FileManager.default.removeItem(at: pidFileURL)
+        }
+
+        return fallback()
     }
 
     static func detect(
@@ -20,16 +51,11 @@ public struct DaemonDetector: Sendable {
         expectedProcessName: String,
         fallback: () -> DaemonStatus
     ) -> DaemonStatus {
-        // Try PID file first
-        if let pidString = try? String(contentsOf: pidFileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-           let pid = Int(pidString) {
-            if isExpectedProcess(pid: pid, expectedProcessName: expectedProcessName) {
-                return DaemonStatus(running: true, pid: pid)
-            }
-            try? FileManager.default.removeItem(at: pidFileURL)
-        }
-
-        return fallback()
+        detect(
+            pidFileURL: pidFileURL,
+            expectedProcessNames: [expectedProcessName],
+            fallback: fallback
+        )
     }
 
     static func commandName(for pid: Int) -> String? {
@@ -62,14 +88,6 @@ public struct DaemonDetector: Sendable {
         return URL(fileURLWithPath: output).lastPathComponent
     }
 
-    private static func isExpectedProcess(pid: Int, expectedProcessName: String) -> Bool {
-        guard kill(Int32(pid), 0) == 0 else {
-            return false
-        }
-
-        return commandName(for: pid) == expectedProcessName
-    }
-
     private static func detectViaPgrep(expectedProcessName: String) -> DaemonStatus {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
@@ -95,6 +113,17 @@ public struct DaemonDetector: Sendable {
 
         if let firstLine = output.split(separator: "\n").first, let pid = Int(firstLine) {
             return DaemonStatus(running: true, pid: pid)
+        }
+
+        return DaemonStatus(running: false, pid: nil)
+    }
+
+    private static func detectViaPgrep(expectedProcessNames: [String]) -> DaemonStatus {
+        for expectedProcessName in expectedProcessNames {
+            let status = detectViaPgrep(expectedProcessName: expectedProcessName)
+            if status.running {
+                return status
+            }
         }
 
         return DaemonStatus(running: false, pid: nil)

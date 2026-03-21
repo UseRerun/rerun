@@ -48,5 +48,9 @@ let package = Package(
             name: "RerunCoreTests",
             dependencies: ["RerunCore"]
         ),
+        .testTarget(
+            name: "RerunCLITests",
+            dependencies: ["RerunCLI"]
+        ),
     ]
 )
