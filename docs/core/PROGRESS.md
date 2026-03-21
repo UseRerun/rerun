@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 4 - Completed
+## Status: Phase 5 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -142,13 +142,31 @@
 ---
 
 ### Phase 5: Capture Daemon (Trigger + Dedup + Store)
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `CaptureDaemon` class (`@MainActor`) in RerunDaemon
+- [x] App switch trigger via `NSWorkspace.didActivateApplicationNotification` → immediate capture
+- [x] 10-second timer for periodic captures while active in same app
+- [x] Timer resets on app switch to avoid double-captures
+- [x] Idle detection via `CGEventSource.secondsSinceLastEventType` (mouse, keyboard, click) — pauses after 30s idle
+- [x] SHA-256 dedup via CryptoKit — hash text content, compare with `latestHashForApp()`, skip if identical
+- [x] Sleep/wake handling: `willSleepNotification` + `sessionDidResignActiveNotification` → pause, `didWakeNotification` + `sessionDidBecomeActiveNotification` → resume
+- [x] `isCaptureInProgress` guard prevents overlapping captures
+- [x] Stats counters: total captures, deduped count, app_switch vs timer breakdown
+- [x] Stats logging every 5 minutes via os.Logger
+- [x] `pause()` / `resume()` public API for manual control
+- [x] `start()` / `stop()` lifecycle methods
+- [x] Updated main.swift: DatabaseManager init → CaptureOrchestrator init → CaptureDaemon init → start
+- [x] All 25 existing tests passing, zero build warnings
 
 #### Decisions Made
-- (none yet)
+- **CaptureDaemon in RerunDaemon, not RerunCore:** It's daemon-specific (NSWorkspace notifications, Timer). Nothing else needs to reference it.
+- **No separate Deduplicator/IdleDetector classes:** Each is ~5 lines of code. Inline in CaptureDaemon.
+- **`@MainActor` + `Task {}` pattern:** Timer and notification observers fire on main thread. Async capture work (OCR) hops to cooperative pool via `await orchestrator.capture()`, returns to main actor for state mutation.
+- **`Task { @MainActor in }` for Timer closures:** Timer's `@Sendable` closure can't directly call `@MainActor` methods. Wrapping in `Task { @MainActor in }` resolves Swift 6 concurrency warnings.
+- **Reuse `isPaused` for manual and system sleep:** Simpler than separate flags, correct in all realistic scenarios.
+- **CryptoKit SHA-256:** Built-in, no dependency needed. Hex string format matches existing `textHash` column.
 
 #### Blockers
 - (none)
@@ -323,6 +341,14 @@
 - --test-ocr and --test-capture daemon flags for integration testing
 - 6 new OCR tests, 25 total passing (removed 3 CG-dependent integration tests)
 
+### 2026-03-21
+- Completed Phase 5: Capture daemon (trigger + dedup + store)
+- CaptureDaemon class: app switch triggers, 10s timer, idle detection (30s), SHA-256 dedup
+- Sleep/wake + screen lock/unlock handling via NSWorkspace notifications
+- Stats logging every 5 minutes (captures, dedup count, trigger breakdown)
+- Updated main.swift to wire up DatabaseManager → CaptureOrchestrator → CaptureDaemon
+- Zero warnings, 25 tests passing
+
 ---
 
 ## Files Changed
@@ -339,6 +365,8 @@
 - `app/Sources/RerunCore/Capture/CaptureOrchestrator.swift` (new)
 - `app/Tests/RerunCoreTests/OCRTests.swift` (new)
 - `app/Sources/RerunDaemon/main.swift` (updated — added --test-ocr and --test-capture flags)
+- `app/Sources/RerunDaemon/CaptureDaemon.swift` (new — capture daemon with trigger, dedup, store)
+- `app/Sources/RerunDaemon/main.swift` (updated — wired up DatabaseManager + CaptureDaemon)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

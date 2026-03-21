@@ -71,8 +71,21 @@ if CommandLine.arguments.contains("--test-capture") {
     RunLoop.main.run()
 }
 
-print("Rerun daemon v\(Rerun.version) starting...")
-print("Press Ctrl+C to stop.")
+// MARK: - Daemon Startup
 
-// Keep the daemon alive
+let db: DatabaseManager
+do {
+    let path = try DatabaseManager.defaultPath()
+    db = try DatabaseManager(path: path)
+} catch {
+    fputs("Failed to initialize database: \(error.localizedDescription)\n", stderr)
+    exit(1)
+}
+
+let orchestrator = CaptureOrchestrator()
+let daemon = CaptureDaemon(orchestrator: orchestrator, db: db)
+
+print("Rerun daemon v\(Rerun.version) starting...")
+daemon.start()
+
 RunLoop.main.run()
