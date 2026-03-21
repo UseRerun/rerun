@@ -204,6 +204,185 @@ struct DatabaseTests {
         #expect(daily.isEmpty)
     }
 
+    @Test func fetchCaptureClosestTo() async throws {
+        let db = try makeDB()
+        let formatter = ISO8601DateFormatter()
+
+        let t1 = Date(timeIntervalSinceNow: -3600) // 1 hour ago
+        let t2 = Date(timeIntervalSinceNow: -1800) // 30 min ago
+        let t3 = Date(timeIntervalSinceNow: -600)  // 10 min ago
+
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: t1),
+            appName: "App1",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "one hour ago",
+            textHash: "h1"
+        ))
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: t2),
+            appName: "App2",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "thirty min ago",
+            textHash: "h2"
+        ))
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: t3),
+            appName: "App3",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "ten min ago",
+            textHash: "h3"
+        ))
+
+        // Query closest to 25 min ago — should match the 30-min-ago capture
+        let target = formatter.string(from: Date(timeIntervalSinceNow: -1500))
+        let closest = try await db.fetchCapture(closestTo: target)
+        #expect(closest?.appName == "App2")
+
+        // Empty DB returns nil
+        let emptyDb = try makeDB()
+        let nothing = try await emptyDb.fetchCapture(closestTo: target)
+        #expect(nothing == nil)
+    }
+
+    @Test func fetchCapturesWithSince() async throws {
+        let db = try makeDB()
+        let formatter = ISO8601DateFormatter()
+
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: Date(timeIntervalSinceNow: -7200)),
+            appName: "Old",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "old capture",
+            textHash: "h1"
+        ))
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: Date(timeIntervalSinceNow: -600)),
+            appName: "Recent",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "recent capture",
+            textHash: "h2"
+        ))
+
+        // Fetch all
+        let all = try await db.fetchCaptures(since: nil, limit: 100)
+        #expect(all.count == 2)
+
+        // Fetch since 1 hour ago — only recent
+        let since = formatter.string(from: Date(timeIntervalSinceNow: -3600))
+        let filtered = try await db.fetchCaptures(since: since, limit: 100)
+        #expect(filtered.count == 1)
+        #expect(filtered[0].appName == "Recent")
+    }
+
+    @Test func fetchCapturesWithoutLimitReturnsAllMatches() async throws {
+        let db = try makeDB()
+        let formatter = ISO8601DateFormatter()
+
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: Date(timeIntervalSinceNow: -7200)),
+            appName: "Old",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "old capture",
+            textHash: "h1"
+        ))
+        try await db.insertCapture(Capture(
+            timestamp: formatter.string(from: Date(timeIntervalSinceNow: -600)),
+            appName: "Recent",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "recent capture",
+            textHash: "h2"
+        ))
+
+        let all = try await db.fetchCaptures(since: nil, limit: nil)
+        #expect(all.count == 2)
+
+        let since = formatter.string(from: Date(timeIntervalSinceNow: -3600))
+        let filtered = try await db.fetchCaptures(since: since, limit: nil)
+        #expect(filtered.count == 1)
+        #expect(filtered[0].appName == "Recent")
+    }
+
+    @Test func topApps() async throws {
+        let db = try makeDB()
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+
+        for i in 0..<5 {
+            try await db.insertCapture(Capture(
+                timestamp: formatter.string(from: now.addingTimeInterval(TimeInterval(-i))),
+                appName: "Safari",
+                textSource: "accessibility",
+                captureTrigger: "idle",
+                textContent: "safari \(i)",
+                textHash: "s\(i)"
+            ))
+        }
+        for i in 0..<3 {
+            try await db.insertCapture(Capture(
+                timestamp: formatter.string(from: now.addingTimeInterval(TimeInterval(-i))),
+                appName: "Terminal",
+                textSource: "accessibility",
+                captureTrigger: "idle",
+                textContent: "terminal \(i)",
+                textHash: "t\(i)"
+            ))
+        }
+
+        let top = try await db.topApps()
+        #expect(top.count == 2)
+        #expect(top[0].appName == "Safari")
+        #expect(top[0].count == 5)
+        #expect(top[1].appName == "Terminal")
+        #expect(top[1].count == 3)
+    }
+
+    @Test func captureStatsWithSince() async throws {
+        let db = try makeDB()
+        let formatter = ISO8601DateFormatter()
+
+        let old = formatter.string(from: Date(timeIntervalSinceNow: -7200))
+        let middle = formatter.string(from: Date(timeIntervalSinceNow: -1800))
+        let recent = formatter.string(from: Date(timeIntervalSinceNow: -600))
+
+        try await db.insertCapture(Capture(
+            timestamp: old,
+            appName: "Old",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "old capture",
+            textHash: "h1"
+        ))
+        try await db.insertCapture(Capture(
+            timestamp: middle,
+            appName: "Middle",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "middle capture",
+            textHash: "h2"
+        ))
+        try await db.insertCapture(Capture(
+            timestamp: recent,
+            appName: "Recent",
+            textSource: "accessibility",
+            captureTrigger: "idle",
+            textContent: "recent capture",
+            textHash: "h3"
+        ))
+
+        let since = formatter.string(from: Date(timeIntervalSinceNow: -3600))
+        #expect(try await db.captureCount(since: since) == 2)
+        #expect(try await db.oldestCaptureTimestamp(since: since) == middle)
+        #expect(try await db.newestCaptureTimestamp(since: since) == recent)
+    }
+
     @Test func fetchCapturesOrdering() async throws {
         let db = try makeDB()
         let formatter = ISO8601DateFormatter()

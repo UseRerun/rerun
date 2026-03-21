@@ -161,6 +161,30 @@ public actor DatabaseManager {
         }
     }
 
+    public func fetchCaptures(since: String?, limit: Int? = nil) throws -> [Capture] {
+        try dbPool.read { db in
+            var request = Capture.order(Capture.Columns.timestamp.desc)
+            if let since {
+                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            }
+            if let limit {
+                guard limit > 0 else { return [] }
+                request = request.limit(limit)
+            }
+            return try request.fetchAll(db)
+        }
+    }
+
+    public func fetchCapture(closestTo timestamp: String) throws -> Capture? {
+        try dbPool.read { db in
+            try Capture.fetchOne(db, sql: """
+                SELECT * FROM capture
+                ORDER BY ABS(julianday(timestamp) - julianday(?))
+                LIMIT 1
+                """, arguments: [timestamp])
+        }
+    }
+
     public func fetchCapture(id: String) throws -> Capture? {
         try dbPool.read { db in
             try Capture.fetchOne(db, id: id)
@@ -168,28 +192,44 @@ public actor DatabaseManager {
     }
 
     public func captureCount() throws -> Int {
+        try captureCount(since: nil)
+    }
+
+    public func captureCount(since: String?) throws -> Int {
         try dbPool.read { db in
-            try Capture.fetchCount(db)
+            var request = Capture.all()
+            if let since {
+                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            }
+            return try request.fetchCount(db)
         }
     }
 
     public func oldestCaptureTimestamp() throws -> String? {
+        try oldestCaptureTimestamp(since: nil)
+    }
+
+    public func oldestCaptureTimestamp(since: String?) throws -> String? {
         try dbPool.read { db in
-            try Capture
-                .order(Capture.Columns.timestamp.asc)
-                .limit(1)
-                .fetchOne(db)?
-                .timestamp
+            var request = Capture.order(Capture.Columns.timestamp.asc)
+            if let since {
+                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            }
+            return try request.limit(1).fetchOne(db)?.timestamp
         }
     }
 
     public func newestCaptureTimestamp() throws -> String? {
+        try newestCaptureTimestamp(since: nil)
+    }
+
+    public func newestCaptureTimestamp(since: String?) throws -> String? {
         try dbPool.read { db in
-            try Capture
-                .order(Capture.Columns.timestamp.desc)
-                .limit(1)
-                .fetchOne(db)?
-                .timestamp
+            var request = Capture.order(Capture.Columns.timestamp.desc)
+            if let since {
+                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            }
+            return try request.limit(1).fetchOne(db)?.timestamp
         }
     }
 
@@ -245,6 +285,21 @@ public actor DatabaseManager {
             arguments.append(limit)
 
             return try Capture.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+        }
+    }
+
+    public func topApps(since: String? = nil, limit: Int = 10) throws -> [(appName: String, count: Int)] {
+        try dbPool.read { db in
+            var sql = "SELECT appName, COUNT(*) as cnt FROM capture"
+            var arguments: [any DatabaseValueConvertible] = []
+            if let since {
+                sql += " WHERE julianday(timestamp) >= julianday(?)"
+                arguments.append(since)
+            }
+            sql += " GROUP BY appName ORDER BY cnt DESC LIMIT ?"
+            arguments.append(limit)
+            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            return rows.map { ($0["appName"] as String, $0["cnt"] as Int) }
         }
     }
 

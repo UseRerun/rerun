@@ -167,6 +167,25 @@ struct ExclusionManagerTests {
         #expect(after == false)
     }
 
+    @Test func refreshPicksUpExternalDatabaseChanges() async throws {
+        let db = try makeDB()
+        let manager = ExclusionManager(db: db)
+        try await manager.loadExclusions()
+
+        let before = await manager.shouldExcludeApp(bundleId: "com.custom.app")
+        #expect(before == false)
+
+        try await db.insertExclusion(Exclusion(type: "app", value: "com.custom.app"))
+
+        let stale = await manager.shouldExcludeApp(bundleId: "com.custom.app")
+        #expect(stale == false)
+
+        try await manager.refresh()
+
+        let refreshed = await manager.shouldExcludeApp(bundleId: "com.custom.app")
+        #expect(refreshed)
+    }
+
     @Test func excludedCountIncrements() async throws {
         let db = try makeDB()
         let manager = ExclusionManager(db: db)
