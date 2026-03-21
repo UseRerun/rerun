@@ -43,6 +43,10 @@ public final class AccessibilityExtractor: @unchecked Sendable {
 
         // Get frontmost app metadata via NSWorkspace (more reliable than AX for this)
         guard let frontApp = NSWorkspace.shared.frontmostApplication else { return nil }
+
+        // Never capture our own app — we'd walk our own AX tree and crash
+        guard frontApp.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return nil }
+
         let appName = frontApp.localizedName ?? "Unknown"
         let bundleId = frontApp.bundleIdentifier
 
