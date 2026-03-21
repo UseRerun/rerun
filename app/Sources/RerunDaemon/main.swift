@@ -195,9 +195,20 @@ if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundle
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
 
+    // Prompt for permissions if not yet granted
+    AccessibilityExtractor.requestAccessibilityIfNeeded()
+    OCRExtractor.requestScreenRecordingIfNeeded()
+
     // Menu bar status item
     let statusBar = StatusBarController()
     statusBar.setup(daemon: daemon)
+
+    // Chat panel + global hotkey
+    let chatPanel = ChatPanel()
+    statusBar.setChatPanel(chatPanel)
+
+    let hotkeyManager = HotkeyManager { chatPanel.toggle() }
+    hotkeyManager.start()
 
     app.run()
 } else {

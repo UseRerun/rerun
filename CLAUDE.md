@@ -108,6 +108,16 @@ Prod-specific checks should be explicit. Avoid killing or reusing the user's ins
 
 **Always manually test your work.** Unit tests are not sufficient. After implementing a feature, run the actual commands or trigger the actual code paths and verify the output is correct. "It compiles and tests pass" is not done.
 
+**Verify before claiming success.** Check logs or output to confirm actual state. Never say "this should work now" or "should be the last time" without evidence. If unsure, say so.
+
+**Don't run `swift build` separately before `./dev.sh start`.** dev.sh runs its own build. Running it separately changes the binary, which triggers a re-copy and re-sign of RerunDev.app, which invalidates TCC permissions (Accessibility, Screen Recording).
+
+**dev.sh builds a real RerunDev.app bundle** with Developer ID signing so TCC permissions persist across rebuilds. It tracks a source binary hash to avoid unnecessary re-copy/re-sign. This is critical — ad-hoc signing invalidates TCC on every rebuild.
+
+**Use Carbon `RegisterEventHotKey` for global hotkeys**, not `NSEvent.addGlobalMonitorForEvents`. Carbon hotkeys don't need Accessibility permission and are more reliable.
+
+**Use `os.Logger` at `.notice` or `.error` level** for diagnostics. `.info` and `.debug` are filtered by macOS unified logging and won't show up in `log show`.
+
 **No fallbacks.** This is a new product — there are no users to maintain backwards compatibility for. If something requires a specific OS version or framework, require it. Don't write graceful degradation paths, fallback chains, or "if unavailable, try X instead" code. The product should work perfectly on its target platform, not partially everywhere. Fallbacks are exceedingly rare and need a strong justification.
 
 ## Research

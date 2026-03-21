@@ -2,10 +2,11 @@ import AppKit
 import RerunCore
 
 @MainActor
-final class StatusBarController {
+final class StatusBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private weak var daemon: CaptureDaemon?
     private var statsTimer: Timer?
+    private var chatPanel: ChatPanel?
     private let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
         ?? Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String
         ?? ProcessInfo.processInfo.processName
@@ -16,15 +17,10 @@ final class StatusBarController {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "eye.circle", accessibilityDescription: appName)
         item.button?.toolTip = appName
-        item.menu = buildMenu()
+        let menu = buildMenu()
+        menu.delegate = self
+        item.menu = menu
         self.statusItem = item
-
-        // Refresh menu every 30 seconds for updated stats
-        statsTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.statusItem?.menu = self?.buildMenu()
-            }
-        }
     }
 
     private func buildMenu() -> NSMenu {
@@ -61,6 +57,12 @@ final class StatusBarController {
 
         menu.addItem(NSMenuItem.separator())
 
+        let chatItem = NSMenuItem(title: "Chat\u{2026}", action: #selector(toggleChat), keyEquivalent: "")
+        chatItem.target = self
+        menu.addItem(chatItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let quitItem = NSMenuItem(title: "Quit \(appName)", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -84,6 +86,21 @@ final class StatusBarController {
         let pauseURL = RerunHome.pauseFileURL()
         try? FileManager.default.removeItem(at: pauseURL)
         statusItem?.menu = buildMenu()
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        menu.removeAllItems()
+        for item in buildMenu().items {
+            menu.addItem(item.copy() as! NSMenuItem)
+        }
+    }
+
+    func setChatPanel(_ panel: ChatPanel) {
+        self.chatPanel = panel
+    }
+
+    @objc private func toggleChat() {
+        chatPanel?.toggle()
     }
 
     @objc private func quitApp() {
