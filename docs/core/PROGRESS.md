@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 6 - Completed
+## Status: Phase 7 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -206,13 +206,29 @@
 ---
 
 ### Phase 7: Exclusion System
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `ExclusionManager` actor in RerunCore/Privacy/
+- [x] Created `DefaultExclusions` enum with 9 default app bundle IDs (1Password, 1Password 7, Bitwarden, LastPass, Keeper, Dashlane, System Settings, Passwords, Rerun)
+- [x] Seeds default exclusions on first `loadExclusions()` call (empty DB → insert defaults)
+- [x] In-memory cache: `Set<String>` for bundle IDs (O(1) lookup), array for domain patterns
+- [x] Two-phase exclusion check: `shouldExcludeApp(bundleId:)` pre-capture, `shouldExclude(bundleId:url:windowTitle:)` post-capture
+- [x] Private/incognito window detection via window title patterns (Safari, Chrome, Edge, Firefox)
+- [x] Domain exclusion with wildcard support (`*.bankofamerica.com` matches `www.bankofamerica.com`)
+- [x] Wired into `CaptureDaemon.performCapture()`: bundle ID check before extraction, full check after capture
+- [x] `addExclusion()` / `removeExclusion()` API with immediate cache rebuild
+- [x] Excluded count tracked in stats, logged in periodic stats output
+- [x] ExclusionManager passed through daemon init → main.swift wiring
+- [x] 14 new tests, 44 total passing, zero build warnings
 
 #### Decisions Made
-- (none yet)
+- **Actor, not class:** Matches `DatabaseManager` pattern. Thread-safe cache access without manual locking.
+- **Two-phase check:** Pre-capture check (bundle ID only) skips all extraction for excluded apps — zero CPU cost. Post-capture check catches URL/window-based exclusions that require AX extraction to discover.
+- **No domain exclusions by default:** URLs are valuable context. Users can add domain exclusions via CLI later.
+- **`com.apple.Passwords` included:** macOS Tahoe has a standalone Passwords app separate from System Settings.
+- **Private window detection is browser-scoped:** Match known private-window markers only for supported browser bundle IDs to avoid dropping normal pages like "How Incognito Mode Works".
+- **Cache rebuild on mutation:** Simple and correct. Exclusion list is small (< 100 items), so full rebuild is negligible cost.
 
 #### Blockers
 - (none)
@@ -372,6 +388,14 @@
 - RERUN_HOME env var override, collision handling (-2, -3 suffixes), atomic writes
 - Wired into CaptureDaemon pipeline (markdown-first; failures skip SQLite indexing)
 - 5 new tests, 30 total passing, zero warnings
+- Completed Phase 7: Exclusion system
+- ExclusionManager actor + DefaultExclusions in RerunCore/Privacy/
+- 9 default app exclusions (password managers, System Settings, Passwords app, Rerun)
+- Two-phase check: pre-capture (bundle ID) + post-capture (URL, private browsing windows)
+- Private browsing detection for Safari, Chrome, Edge, Firefox
+- Domain exclusion with wildcard matching
+- Wired into CaptureDaemon pipeline with excluded count in stats
+- 14 new tests, 44 total passing, zero warnings
 
 ---
 
@@ -395,6 +419,11 @@
 - `app/Sources/RerunCore/Storage/MarkdownWriter.swift` (new — markdown file writer with YAML frontmatter)
 - `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — wired in MarkdownWriter before DB insert)
 - `app/Tests/RerunCoreTests/MarkdownWriterTests.swift` (new — 5 tests)
+- `app/Sources/RerunCore/Privacy/DefaultExclusions.swift` (new — default app/window exclusion lists)
+- `app/Sources/RerunCore/Privacy/ExclusionManager.swift` (new — exclusion checking actor with cache)
+- `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — added ExclusionManager + two-phase exclusion checks)
+- `app/Sources/RerunDaemon/main.swift` (updated — wired up ExclusionManager)
+- `app/Tests/RerunCoreTests/ExclusionManagerTests.swift` (new — 11 tests)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

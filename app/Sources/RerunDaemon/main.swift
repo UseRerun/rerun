@@ -83,9 +83,17 @@ do {
 }
 
 let orchestrator = CaptureOrchestrator()
-let daemon = CaptureDaemon(orchestrator: orchestrator, db: db)
+let exclusionManager = ExclusionManager(db: db)
+let daemon = CaptureDaemon(orchestrator: orchestrator, db: db, exclusionManager: exclusionManager)
 
 print("Rerun daemon v\(Rerun.version) starting...")
-daemon.start()
+Task { @MainActor in
+    do {
+        try await daemon.start()
+    } catch {
+        fputs("Failed to start daemon: \(error.localizedDescription)\n", stderr)
+        exit(1)
+    }
+}
 
 RunLoop.main.run()

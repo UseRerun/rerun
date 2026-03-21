@@ -9,6 +9,7 @@ final class CaptureDaemon {
     // MARK: - Dependencies
     private let orchestrator: CaptureOrchestrator
     private let db: DatabaseManager
+    private let exclusionManager: ExclusionManager
     private let logger = Logger(subsystem: "com.rerun", category: "CaptureDaemon")
 
     // MARK: - Timers & State
@@ -28,14 +29,16 @@ final class CaptureDaemon {
     private let idleThreshold: TimeInterval = 30.0
     private let statsInterval: TimeInterval = 300.0
 
-    init(orchestrator: CaptureOrchestrator, db: DatabaseManager) {
+    init(orchestrator: CaptureOrchestrator, db: DatabaseManager, exclusionManager: ExclusionManager) {
         self.orchestrator = orchestrator
         self.db = db
+        self.exclusionManager = exclusionManager
     }
 
     // MARK: - Public API
 
-    func start() {
+    func start() async throws {
+        try await exclusionManager.loadExclusions()
         logger.info("Starting daemon v\(Rerun.version)")
         logger.info("Accessibility: \(AccessibilityExtractor.isAccessibilityGranted)")
         logger.info("Screen Recording: \(OCRExtractor.isScreenRecordingGranted)")
@@ -81,8 +84,21 @@ final class CaptureDaemon {
         Task {
             defer { isCaptureInProgress = false }
 
+            // Pre-capture exclusion check (bundle ID only — skip extraction entirely)
+            let frontmostBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            if await exclusionManager.shouldExcludeApp(bundleId: frontmostBundleId) {
+                logger.debug("Excluded app: \(frontmostBundleId ?? "nil")")
+                return
+            }
+
             guard let result = await orchestrator.capture() else {
                 logger.debug("No capture result")
+                return
+            }
+
+            // Post-capture exclusion check (URL, private browsing windows)
+            if await exclusionManager.shouldExclude(bundleId: result.bundleId, url: result.url, windowTitle: result.windowTitle) {
+                logger.debug("Excluded after capture: \(result.appName)")
                 return
             }
 
@@ -164,7 +180,10 @@ final class CaptureDaemon {
     }
 
     private func logStats() {
-        logger.info("Stats: \(self.totalCaptures) captures (\(self.appSwitchCaptures) app_switch, \(self.timerCaptures) timer), \(self.deduplicatedCount) deduped")
+        Task {
+            let excluded = await exclusionManager.excludedCount
+            logger.info("Stats: \(self.totalCaptures) captures (\(self.appSwitchCaptures) app_switch, \(self.timerCaptures) timer), \(self.deduplicatedCount) deduped, \(excluded) excluded")
+        }
     }
 
     // MARK: - Notification Observers
