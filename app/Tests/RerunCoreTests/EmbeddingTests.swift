@@ -116,6 +116,50 @@ struct EmbeddingTests {
         #expect(captures.map(\.id) == [c1.id, c2.id, c3.id])
     }
 
+    @Test func filteredVectorSearchDoesNotDropMatchesOutsidePrefetchWindow() async throws {
+        let db = try makeDB()
+        let query = [Float](repeating: 0.0, count: 512)
+
+        for index in 0..<20 {
+            let capture = Capture(
+                id: "chrome-\(index)",
+                timestamp: ISO8601DateFormatter().string(from: Date()),
+                appName: "Chrome",
+                bundleId: "com.google.Chrome",
+                windowTitle: "Chrome \(index)",
+                url: nil,
+                textSource: "accessibility",
+                captureTrigger: "app_switch",
+                textContent: "Chrome content \(index)",
+                textHash: "chrome-\(index)"
+            )
+            try await db.insertCapture(capture)
+            try await db.insertEmbedding(captureId: capture.id, embedding: query)
+        }
+
+        let safariEmbedding = [Float](repeating: 0.25, count: 512)
+        for index in 0..<5 {
+            let capture = Capture(
+                id: "safari-\(index)",
+                timestamp: ISO8601DateFormatter().string(from: Date()),
+                appName: "Safari",
+                bundleId: "com.apple.Safari",
+                windowTitle: "Safari \(index)",
+                url: nil,
+                textSource: "accessibility",
+                captureTrigger: "app_switch",
+                textContent: "Safari content \(index)",
+                textHash: "safari-\(index)"
+            )
+            try await db.insertCapture(capture)
+            try await db.insertEmbedding(captureId: capture.id, embedding: safariEmbedding)
+        }
+
+        let results = try await db.findSimilarWithDistance(to: query, app: "Safari", limit: 5)
+        #expect(results.count == 5)
+        #expect(results.allSatisfy { $0.capture.appName == "Safari" })
+    }
+
     @Test func embeddingGeneratorAvailability() {
         // Should return a bool without crashing, regardless of system
         let _ = EmbeddingGenerator.isAvailable

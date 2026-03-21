@@ -248,6 +248,107 @@ public actor DatabaseManager {
         }
     }
 
+    // MARK: - Ranked Search (for hybrid scoring)
+
+    public func searchCapturesWithRank(
+        query: String,
+        app: String? = nil,
+        since: String? = nil,
+        limit: Int = 20
+    ) throws -> [(capture: Capture, rank: Float)] {
+        try dbPool.read { db in
+            guard limit > 0 else { return [] }
+            guard let pattern = FTS5Pattern(matchingAllPrefixesIn: query) else { return [] }
+
+            var sql = """
+                SELECT capture.*, rank
+                FROM capture
+                JOIN capture_fts ON capture_fts.rowid = capture.rowid
+                    AND capture_fts MATCH ?
+                """
+            var arguments: [any DatabaseValueConvertible] = [pattern]
+
+            var conditions: [String] = []
+            if let app {
+                conditions.append("capture.appName = ? COLLATE NOCASE")
+                arguments.append(app)
+            }
+            if let since {
+                conditions.append("julianday(capture.timestamp) >= julianday(?)")
+                arguments.append(since)
+            }
+            if !conditions.isEmpty {
+                sql += " WHERE " + conditions.joined(separator: " AND ")
+            }
+
+            sql += " ORDER BY rank LIMIT ?"
+            arguments.append(limit)
+
+            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            return try rows.map { row in
+                let capture = try Capture(row: row)
+                let rank: Float = row["rank"]
+                return (capture: capture, rank: rank)
+            }
+        }
+    }
+
+    public func findSimilarWithDistance(
+        to embedding: [Float],
+        app: String? = nil,
+        since: String? = nil,
+        limit: Int = 20
+    ) throws -> [(capture: Capture, distance: Float)] {
+        try dbPool.read { db in
+            guard limit > 0 else { return [] }
+            let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+            let candidateLimit: Int
+            if app == nil && since == nil {
+                candidateLimit = limit * 3
+            } else {
+                // sqlite-vec can't push outer filters into the KNN query, so filtered
+                // searches need the full candidate set to avoid dropping valid matches.
+                candidateLimit = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM captures_vec") ?? 0
+            }
+            guard candidateLimit > 0 else { return [] }
+
+            var sql = """
+                SELECT capture.*, vec.distance
+                FROM (
+                    SELECT capture_id, distance
+                    FROM captures_vec
+                    WHERE embedding MATCH ? AND k = ?
+                    ORDER BY distance
+                ) AS vec
+                JOIN capture ON capture.id = vec.capture_id
+                """
+            var arguments: [any DatabaseValueConvertible] = [blob, candidateLimit]
+
+            var conditions: [String] = []
+            if let app {
+                conditions.append("capture.appName = ? COLLATE NOCASE")
+                arguments.append(app)
+            }
+            if let since {
+                conditions.append("julianday(capture.timestamp) >= julianday(?)")
+                arguments.append(since)
+            }
+            if !conditions.isEmpty {
+                sql += " WHERE " + conditions.joined(separator: " AND ")
+            }
+
+            sql += " ORDER BY vec.distance LIMIT ?"
+            arguments.append(limit)
+
+            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            return try rows.map { row in
+                let capture = try Capture(row: row)
+                let distance: Float = row["distance"]
+                return (capture: capture, distance: distance)
+            }
+        }
+    }
+
     // MARK: - Vector Embeddings
 
     public func insertEmbedding(captureId: String, embedding: [Float]) throws {

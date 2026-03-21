@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 10 - Completed
+## Status: Phase 11 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -334,13 +334,30 @@
 ---
 
 ### Phase 11: CLI `rerun search` (Semantic + Hybrid)
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `HybridSearch` struct in RerunCore/Search/ combining FTS5 and sqlite-vec results
+- [x] Scoring: 60% vector similarity / 40% FTS5 rank with normalization `1/(1+|score|)`
+- [x] Merge and re-rank with deduplication by capture ID
+- [x] Created `QueryParser` with regex-based NL parsing (time references, app filters)
+- [x] Foundation Models `@Generable` integration behind `#if canImport(FoundationModels)` + `@available(macOS 26, *)`
+- [x] Graceful fallback: embeddings unavailable → keyword-only; Foundation Models unavailable → regex parser
+- [x] Added `searchCapturesWithRank()` to DatabaseManager (returns FTS5 BM25 rank)
+- [x] Added `findSimilarWithDistance()` to DatabaseManager (returns L2 distance, supports app/since filters)
+- [x] Updated `SearchCommand` to use hybrid search by default
+- [x] Added `--mode keyword|semantic|hybrid` flag for explicit control
+- [x] QueryParser extracts: "today", "yesterday", "last week", "N days ago", named days, "in/from <app>"
+- [x] 17 new tests (7 HybridSearch + 1 normalization + 9 QueryParser), 88 total passing, zero warnings
 
 #### Decisions Made
-- (none yet)
+- **`HybridSearch` as struct, not actor:** Stateless — all state lives in DatabaseManager. Matches `EmbeddingGenerator` pattern.
+- **Score normalization `1/(1+|x|)`:** Simple, monotonic, no knowledge of distribution needed. Works for both FTS5 negative ranks and L2 positive distances.
+- **No min/max normalization:** Would break on single results and needs to see all results before scoring.
+- **Explicit CLI flags override parsed values:** `--since` and `--app` take precedence over QueryParser extracted values. Users expect explicit flags to win.
+- **QueryParser as regex fallback, Foundation Models as upgrade:** Regex parser covers 80% of NL queries. Foundation Models gated behind `#if canImport` — zero impact on macOS 15 builds.
+- **`findSimilarWithDistance` keeps filtered search exact:** sqlite-vec can't push `app`/`since` filters into the KNN query, so unfiltered search over-fetches `3x`, while filtered search scans all vector rows before the outer filter.
+- **`Capture(row:)` for row mapping:** GRDB's Codable-based FetchableRecord ignores extra columns (rank, distance) in the row.
 
 #### Blockers
 - (none)
@@ -480,6 +497,16 @@
 - Fire-and-forget embedding in CaptureDaemon via Task.detached after DB insert
 - 13 new tests, 71 total passing, zero warnings
 
+- Completed Phase 11: CLI `rerun search` (Semantic + Hybrid)
+- HybridSearch: combines FTS5 keyword + sqlite-vec semantic results with weighted scoring (60% vector / 40% keyword)
+- Score normalization: `1/(1+|x|)` maps both FTS5 ranks (negative) and L2 distances (positive) to (0, 1]
+- Deduplication: captures appearing in both result sets get merged scores, marked as source `.both`
+- QueryParser: regex-based NL parsing extracts time references ("today", "yesterday", "3 days ago", named days) and app filters ("in Safari", "from Terminal")
+- Foundation Models `@Generable` integration gated with `#if canImport(FoundationModels)` + `@available(macOS 26, *)`
+- Two new DatabaseManager methods: `searchCapturesWithRank()` (FTS5 + rank), `findSimilarWithDistance()` (vec + distance + app/since filters)
+- SearchCommand updated: `--mode keyword|semantic|hybrid` flag, hybrid by default, QueryParser pipeline
+- 17 new tests, 88 total passing, zero warnings
+
 ---
 
 ## Files Changed
@@ -526,6 +553,12 @@
 - `app/Sources/RerunCore/Search/EmbeddingGenerator.swift` (new — NLContextualEmbedding wrapper with chunking + averaging)
 - `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — fire-and-forget embedding generation after capture insert)
 - `app/Tests/RerunCoreTests/EmbeddingTests.swift` (new — 15 tests)
+
+- `app/Sources/RerunCore/Search/HybridSearch.swift` (new — hybrid search with weighted scoring, dedup, and mode switching)
+- `app/Sources/RerunCore/Search/QueryParser.swift` (new — NL query parsing with regex fallback + Foundation Models macOS 26)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — added searchCapturesWithRank + findSimilarWithDistance)
+- `app/Sources/RerunCLI/Commands/SearchCommand.swift` (updated — hybrid search pipeline, --mode flag, QueryParser integration)
+- `app/Tests/RerunCoreTests/HybridSearchTests.swift` (new — 17 tests for scoring, DB methods, query parsing)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

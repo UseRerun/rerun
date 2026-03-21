@@ -8,14 +8,16 @@ struct SearchCommand: AsyncParsableCommand {
         abstract: "Search captured screen text.",
         discussion: """
             Examples:
-              rerun search "stripe"                       Search all captures
-              rerun search "API docs" --app Safari        Filter by app
-              rerun search "meeting" --since 2d           Last 2 days
-              rerun search "deploy" --since 1h --json     JSON output
+              rerun search "stripe"                            Search all captures
+              rerun search "API docs" --app Safari             Filter by app
+              rerun search "meeting" --since 2d                Last 2 days
+              rerun search "deploy" --since 1h --json          JSON output
+              rerun search "payment API" --mode semantic       Semantic search only
+              rerun search "what was I looking at in Safari"   NL query parsing
             """
     )
 
-    @Argument(help: "Search query (keywords).")
+    @Argument(help: "Search query (keywords or natural language).")
     var query: String
 
     @Option(name: .long, help: "Filter by app name (case-insensitive).")
@@ -26,6 +28,9 @@ struct SearchCommand: AsyncParsableCommand {
 
     @Option(name: .long, help: "Maximum number of results.")
     var limit: Int = 20
+
+    @Option(name: .long, help: "Search mode: keyword, semantic, or hybrid (default).")
+    var mode: String = "hybrid"
 
     @Flag(name: .long, help: "Output as JSON.")
     var json = false
@@ -41,24 +46,45 @@ struct SearchCommand: AsyncParsableCommand {
             throw ExitCode(2)
         }
 
-        var sinceISO: String? = nil
+        guard let searchMode = HybridSearch.SearchMode(rawValue: mode) else {
+            print("Invalid --mode value: \(mode). Use: keyword, semantic, or hybrid")
+            throw ExitCode(2)
+        }
+
+        // Parse NL query for implicit filters
+        let parser = QueryParser()
+        let parsed = await parser.parseBestEffort(query)
+
+        // Explicit CLI flags override parsed values
+        var effectiveSince: String? = nil
         if let since {
-            guard let parsed = SearchTimeParser.parseSince(since) else {
+            guard let parsedSince = SearchTimeParser.parseSince(since) else {
                 print("Invalid --since value: \(since). Use: 1h, 2d, 1w, 2026-03-19, or ISO8601")
                 throw ExitCode(2)
             }
-            sinceISO = parsed
+            effectiveSince = parsedSince
+        } else {
+            effectiveSince = parsed.since
         }
 
+        let effectiveApp = app ?? parsed.appFilter
+        let effectiveQuery = parsed.effectiveQuery
+
         let db = try DatabaseManager(path: DatabaseManager.defaultPath())
-        let results = try await db.searchCaptures(
-            query: query,
-            app: app,
-            since: sinceISO,
-            limit: limit
+        let hybridSearch = HybridSearch()
+        let embedder = EmbeddingGenerator()
+
+        let scored = try await hybridSearch.search(
+            query: effectiveQuery,
+            mode: searchMode,
+            app: effectiveApp,
+            since: effectiveSince,
+            limit: limit,
+            db: db,
+            embedder: embedder
         )
 
-        guard !results.isEmpty else {
+        guard !scored.isEmpty else {
             if formatter.useJSON {
                 try formatter.printJSON([SearchResult]())
             } else {
@@ -67,10 +93,10 @@ struct SearchCommand: AsyncParsableCommand {
             throw ExitCode(4)
         }
 
-        let searchResults = results.map { capture in
+        let searchResults = scored.map { result in
             SearchResult(
-                capture: capture,
-                snippet: SearchResult.makeSnippet(from: capture.textContent, query: query)
+                capture: result.capture,
+                snippet: SearchResult.makeSnippet(from: result.capture.textContent, query: effectiveQuery)
             )
         }
 
