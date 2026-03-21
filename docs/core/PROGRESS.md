@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 11 - Completed
+## Status: Phase 12 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -365,13 +365,34 @@
 ---
 
 ### Phase 12: CLI Remaining Commands
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] `rerun recall --at <time>` — fetches capture closest to given timestamp via `fetchCapture(closestTo:)`
+- [x] `rerun start` — spawns rerun-daemon in background via Process, detects sibling binary
+- [x] `rerun stop` — sends SIGTERM to daemon PID via DaemonDetector
+- [x] `rerun pause` / `rerun resume` — file-based pause flag at ~/Library/Application Support/Rerun/paused
+- [x] Daemon reads pause file in `performCapture()` — CLI-driven pause without IPC
+- [x] `rerun export --format jsonl|csv|md --since <dur>` — three output formats to stdout
+- [x] `rerun config [key]` — read-only display of rerun_home, database_path, capture_interval, exclusion_count, version
+- [x] `rerun exclude add <type> <value>` — add app/domain exclusion via DB
+- [x] `rerun exclude list` — show current exclusions
+- [x] `rerun exclude remove <type> <value>` — remove exclusion by type+value
+- [x] `rerun summary [--today]` — basic activity summary with top apps by capture count
+- [x] All commands support `--json` and proper exit codes
+- [x] 3 new DatabaseManager methods: `fetchCapture(closestTo:)`, `fetchCaptures(since:limit:)`, `topApps(since:limit:)`
+- [x] `RerunHome.pauseFileURL()` for pause file location
+- [x] 3 new database tests, 95 total passing, zero warnings
 
 #### Decisions Made
-- (none yet)
+- **File-based pause over IPC:** Touch/remove `~/Library/Application Support/Rerun/paused` file. Daemon checks on each capture cycle. No socket, no signals. Phase 14 (LaunchAgent) will bring proper lifecycle.
+- **start/stop via Process+kill:** `rerun start` spawns sibling binary via `Bundle.main.executableURL`. `rerun stop` sends SIGTERM via PID from `DaemonDetector`. Bare-bones, replaced by LaunchAgent in Phase 14.
+- **Config read-only:** No config store exists yet. Display derived values only. `config set` deferred until there's something to set.
+- **Summary without AI:** Phase 13 adds Foundation Models summarization. Phase 12 shows capture counts grouped by app — useful stats without AI dependency.
+- **Export to stdout:** User redirects to file (`rerun export --format csv > captures.csv`). No `--output` flag needed.
+- **CSV with RFC 4180 escaping:** Double-quote fields containing commas/quotes/newlines. Text content truncated to 500 chars in CSV.
+- **ExcludeCommand uses DB directly:** CLI doesn't need ExclusionManager's in-memory cache. Direct DB calls are simpler. Daemon's cache rebuilds on next restart.
+- **Four separate daemon commands:** `start/stop/pause/resume` as top-level commands, not subcommands of a group. Matches user mental model.
 
 #### Blockers
 - (none)
@@ -507,6 +528,17 @@
 - SearchCommand updated: `--mode keyword|semantic|hybrid` flag, hybrid by default, QueryParser pipeline
 - 17 new tests, 88 total passing, zero warnings
 
+- Completed Phase 12: CLI remaining commands
+- RecallCommand: `rerun recall --at <time>` fetches closest capture via new `fetchCapture(closestTo:)` DB method
+- DaemonCommands: `rerun start/stop/pause/resume` — start spawns sibling binary, stop sends SIGTERM, pause/resume use file-based flag
+- ExcludeCommand: `rerun exclude add/list/remove` with ArgumentParser subcommands, direct DB access
+- ExportCommand: `rerun export --format jsonl|csv|md --since <dur>` — three formats to stdout, RFC 4180 CSV escaping
+- ConfigCommand: `rerun config [key]` — read-only display of 5 config values (rerun_home, database_path, capture_interval, exclusion_count, version)
+- SummaryCommand: `rerun summary [--today]` — capture counts grouped by app via new `topApps()` DB method
+- Daemon pause file check added to `CaptureDaemon.performCapture()` — reads `RerunHome.pauseFileURL()`
+- 3 new DB methods: `fetchCapture(closestTo:)`, `fetchCaptures(since:limit:)`, `topApps(since:limit:)`
+- 3 new database tests, 95 total passing, zero warnings
+
 ---
 
 ## Files Changed
@@ -559,6 +591,18 @@
 - `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — added searchCapturesWithRank + findSimilarWithDistance)
 - `app/Sources/RerunCLI/Commands/SearchCommand.swift` (updated — hybrid search pipeline, --mode flag, QueryParser integration)
 - `app/Tests/RerunCoreTests/HybridSearchTests.swift` (new — 17 tests for scoring, DB methods, query parsing)
+
+- `app/Sources/RerunCLI/Commands/RecallCommand.swift` (new — recall command with closest-to-time lookup)
+- `app/Sources/RerunCLI/Commands/DaemonCommands.swift` (new — start, stop, pause, resume commands)
+- `app/Sources/RerunCLI/Commands/ExcludeCommand.swift` (new — exclude add/list/remove subcommands)
+- `app/Sources/RerunCLI/Commands/ExportCommand.swift` (new — export in jsonl/csv/md formats)
+- `app/Sources/RerunCLI/Commands/ConfigCommand.swift` (new — read-only config display)
+- `app/Sources/RerunCLI/Commands/SummaryCommand.swift` (new — activity summary with top apps)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — added fetchCapture(closestTo:), fetchCaptures(since:limit:), topApps(since:limit:))
+- `app/Sources/RerunCore/Storage/RerunHome.swift` (updated — added pauseFileURL())
+- `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — added pause file check in performCapture())
+- `app/Sources/RerunCLI/RerunCommand.swift` (updated — registered 9 new commands)
+- `app/Tests/RerunCoreTests/DatabaseTests.swift` (updated — 3 new tests: fetchCaptureClosestTo, fetchCapturesWithSince, topApps)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

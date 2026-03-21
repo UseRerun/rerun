@@ -73,6 +73,7 @@ final class CaptureDaemon {
 
     private func performCapture(trigger: String) {
         guard !isCaptureInProgress, !pauseState.isPaused else { return }
+        guard !FileManager.default.fileExists(atPath: RerunHome.pauseFileURL().path) else { return }
 
         if isIdle {
             logger.debug("Idle, skipping capture")
@@ -83,6 +84,13 @@ final class CaptureDaemon {
 
         Task {
             defer { isCaptureInProgress = false }
+
+            do {
+                try await exclusionManager.refresh()
+            } catch {
+                logger.error("Failed to refresh exclusions: \(error.localizedDescription)")
+                return
+            }
 
             // Pre-capture exclusion check (bundle ID only — skip extraction entirely)
             let frontmostBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier

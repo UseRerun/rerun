@@ -91,6 +91,11 @@ public actor ExclusionManager {
         logger.info("Removed exclusion: \(type) = \(value)")
     }
 
+    /// Refresh cache from DB so external writers (CLI, tests) take effect.
+    public func refresh() async throws {
+        try await rebuildCache()
+    }
+
     // MARK: - Private
 
     private func seedDefaults() async throws {

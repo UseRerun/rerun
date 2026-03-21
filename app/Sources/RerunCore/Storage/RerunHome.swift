@@ -12,4 +12,12 @@ public enum RerunHome {
     public static func capturesURL() -> URL {
         baseURL().appendingPathComponent("captures", isDirectory: true)
     }
+
+    public static func pauseFileURL() -> URL {
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Rerun", isDirectory: true)
+        return appSupport.appendingPathComponent("paused")
+    }
 }
