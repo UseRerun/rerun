@@ -20,4 +20,12 @@ public enum RerunHome {
         ).first!.appendingPathComponent("Rerun", isDirectory: true)
         return appSupport.appendingPathComponent("paused")
     }
+
+    public static func pidFileURL() -> URL {
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Rerun", isDirectory: true)
+        return appSupport.appendingPathComponent("daemon.pid")
+    }
 }

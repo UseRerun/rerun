@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build the complete Rerun core: background capture daemon + SQLite/Markdown storage + CLI with search. Every phase produces something testable. No GUI in this plan — that's a separate feature.
+Build the complete Rerun core: background capture daemon + SQLite/Markdown storage + CLI with search. Every phase produces something testable. No end-user GUI in this plan, except a minimal macOS app shell if needed for permissions/login-item startup.
 
 ## Prerequisites
 
@@ -28,9 +28,10 @@ Build the complete Rerun core: background capture daemon + SQLite/Markdown stora
 | 12 | CLI `rerun recall` + remaining commands | 1 hr | recall, start/stop/pause/resume, export |
 | 13 | today.md + index.md agent files | 1-2 hr | Auto-generated summary files for agent consumption |
 | 14 | Daemon lifecycle (LaunchAgent) | 1 hr | Auto-start, persist across reboots |
+| 14.5 | Permission-safe auto-start app shell | 2-4 hr | Signed LSUIElement app or bundled login item using `SMAppService` |
 | 15 | Optimization + polish | 1-2 hr | Power/thermal awareness, performance testing, cleanup |
 
-**Total estimate: 17-25 hours of focused work.**
+**Total estimate: 19-29 hours of focused work.**
 
 ---
 
@@ -572,6 +573,40 @@ An always-on screen memory app must start automatically. LaunchAgent is the macO
 - `Sources/RerunDaemon/LaunchAgentManager.swift`
 - `Sources/RerunDaemon/main.swift` (PID file, signal handling)
 - `Resources/com.rerun.daemon.plist`
+
+---
+
+## Phase 14.5: Permission-Safe Auto-Start App Shell
+
+### Objective
+Make auto-start work without breaking Screen Recording / Accessibility by giving Rerun a real app identity for TCC and login-item startup.
+
+### Rationale
+Plain executables launched from Terminal can piggyback the parent app's permissions. A background LaunchAgent cannot rely on that. If auto-start is required, Rerun needs a signed macOS app shell (ideally `LSUIElement`) or bundled login item registered through `SMAppService`, with capture running under that app-owned identity.
+
+### Tasks
+- [ ] Add a minimal macOS app target (`RerunApp`) to the Swift package / Xcode project
+- [ ] Make the app agent-style (`LSUIElement=1`) so it has no Dock presence by default
+- [ ] Move long-running capture ownership into the app process, or into a bundled login item owned by the app
+- [ ] Register auto-start using `SMAppService` instead of writing raw plist files into `~/Library/LaunchAgents/`
+- [ ] Request and validate Screen Recording + Accessibility from the app bundle identity
+- [ ] Add explicit startup diagnostics: show whether the running process has the required permissions
+- [ ] Keep CLI commands, but make them control the app via IPC/XPC/local socket rather than owning capture directly
+- [ ] Test on a clean macOS user account: reboot/login, verify captures still write to `~/rerun/captures/`
+
+### Success Criteria
+- Auto-start survives logout/login and reboot
+- The auto-started process can still capture text and write markdown files
+- Permissions are granted to a stable app identity, not accidentally inherited from Terminal
+- `rerun status` can tell the user whether the auto-started process is healthy and permissioned
+
+### Files Likely Affected
+- `app/Package.swift` or Xcode project files
+- `app/Sources/RerunApp/` (new)
+- `app/Sources/RerunDaemon/` or shared capture orchestration code
+- `app/Sources/RerunCLI/Commands/DaemonCommands.swift`
+- `app/Sources/RerunCLI/Commands/StatusCommand.swift`
+- `app/Sources/RerunCore/` shared lifecycle / IPC code
 
 ---
 
