@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 8 - Completed
+## Status: Phase 9 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -269,13 +269,31 @@
 ---
 
 ### Phase 9: CLI `rerun search` (FTS5 Keyword)
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `SearchCommand` subcommand with positional `query` argument
+- [x] Implemented `--since <duration>` flag (parses: 30m, 1h, 2d, 1w, 2026-03-19, ISO8601)
+- [x] Implemented `--app <name>` flag (case-insensitive via COLLATE NOCASE)
+- [x] Implemented `--limit <n>` flag (default: 20)
+- [x] Implemented `--json` flag with TTY auto-detection
+- [x] FTS5 MATCH query with prefix matching via existing `searchCaptures()`
+- [x] Results with: timestamp, app, window title, URL, text snippet
+- [x] Human-readable output: one result per block with timestamp, app, snippet, result count
+- [x] JSON output: array of SearchResult objects
+- [x] Exit code 4 when no results found (distinct from error)
+- [x] Empty query returns empty array gracefully (FTS5Pattern returns nil)
+- [x] Created `SearchResult` model in RerunCore with `makeSnippet()` static method
+- [x] 8 new tests (5 search DB tests + 3 snippet tests), 54 total passing, zero warnings
 
 #### Decisions Made
-- (none yet)
+- **Swift-side snippets over FTS5 `snippet()`:** FTS5 snippet returns XML markers and requires custom row decoders. Swift string manipulation is simpler and will be replaced by Phase 11's hybrid search anyway.
+- **No relevance score in output:** FTS5 rank is an internal float meaningless to users. Results are already sorted by relevance.
+- **`COLLATE NOCASE` for app matching:** SQLite built-in, zero performance cost, correct SQL idiom. No schema change needed.
+- **Time parsing inline in SearchCommand:** ~25 lines, only consumer. Extract if `RecallCommand` (Phase 12) needs it.
+- **Deferred `--until` flag:** `searchCaptures()` doesn't have it, `--since` covers 95% of time filtering. Add later if needed.
+- **Deferred `--format` flag:** `--json` matches StatusCommand pattern. `--format jsonl|csv|md` belongs in Phase 12 export.
+- **Swift Regex for duration parsing:** Clean `/^(\d+)([mhdw])$/` regex, available on macOS 13+ (well within platform target).
 
 #### Blockers
 - (none)
@@ -424,6 +442,14 @@
 - Semantic exit codes: 0 (running), 3 (daemon not running)
 - Help text with examples on every command
 - 44 tests passing, zero warnings
+- Completed Phase 9: CLI `rerun search` (FTS5 keyword)
+- SearchCommand with positional query, --app, --since, --limit, --json flags
+- SearchResult model in RerunCore with makeSnippet() for context extraction
+- Case-insensitive app filtering via COLLATE NOCASE
+- Time parsing: relative durations (30m, 1h, 2d, 1w), absolute dates, ISO8601
+- Human-readable output with timestamp, app, window title, URL, snippet
+- Exit code 4 for no results
+- 8 new tests (search + snippets), 54 total passing, zero warnings
 
 ---
 
@@ -459,6 +485,11 @@
 - `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — added ExclusionManager + two-phase exclusion checks)
 - `app/Sources/RerunDaemon/main.swift` (updated — wired up ExclusionManager)
 - `app/Tests/RerunCoreTests/ExclusionManagerTests.swift` (new — 11 tests)
+- `app/Sources/RerunCore/Models/SearchResult.swift` (new — search result model with snippet generation)
+- `app/Sources/RerunCLI/Commands/SearchCommand.swift` (new — FTS5 keyword search CLI command)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — COLLATE NOCASE for app filtering)
+- `app/Sources/RerunCLI/RerunCommand.swift` (updated — registered SearchCommand)
+- `app/Tests/RerunCoreTests/SearchTests.swift` (new — 8 tests)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
