@@ -3,40 +3,48 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-BUNDLE_NAME="Rerun"
-BUNDLE_ID="com.rerun.app"
-VERSION="0.1.0"
-APP_DIR="build/${BUNDLE_NAME}.app"
-CONTENTS="${APP_DIR}/Contents"
+VARIANT="${1:-all}"
+VERSION="${VERSION:-0.1.0}"
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Sabotage Media, LLC (W33JZPPPFN)}"
+
+case "$VARIANT" in
+  all|prod|dev)
+    ;;
+  *)
+    echo "Usage: ./bundle.sh [all|prod|dev]"
+    exit 1
+    ;;
+esac
 
 # Build release binaries
 echo "Building release..."
 swift build -c release
 
-# Clean previous bundle
-rm -rf "${APP_DIR}"
+build_bundle() {
+  local bundle_name="$1"
+  local bundle_id="$2"
+  local app_dir="build/${bundle_name}.app"
+  local contents="${app_dir}/Contents"
 
-# Create bundle structure
-mkdir -p "${CONTENTS}/MacOS"
-mkdir -p "${CONTENTS}/Resources"
+  rm -rf "${app_dir}"
+  mkdir -p "${contents}/MacOS"
+  mkdir -p "${contents}/Resources"
 
-# Copy daemon binary (renamed to match CFBundleExecutable)
-cp .build/release/rerun-daemon "${CONTENTS}/MacOS/${BUNDLE_NAME}"
+  cp .build/release/rerun-daemon "${contents}/MacOS/${bundle_name}"
 
-# Create Info.plist
-cat > "${CONTENTS}/Info.plist" << PLIST
+  cat > "${contents}/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>${BUNDLE_ID}</string>
+    <string>${bundle_id}</string>
     <key>CFBundleName</key>
-    <string>${BUNDLE_NAME}</string>
+    <string>${bundle_name}</string>
     <key>CFBundleDisplayName</key>
-    <string>${BUNDLE_NAME}</string>
+    <string>${bundle_name}</string>
     <key>CFBundleExecutable</key>
-    <string>${BUNDLE_NAME}</string>
+    <string>${bundle_name}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -53,12 +61,27 @@ cat > "${CONTENTS}/Info.plist" << PLIST
 </plist>
 PLIST
 
-# Code sign with Developer ID (stable identity for TCC permissions)
-codesign --force --sign "Developer ID Application: Sabotage Media, LLC (W33JZPPPFN)" "${APP_DIR}"
+  codesign --force --sign "${CODESIGN_IDENTITY}" "${app_dir}"
+  echo "Built: ${app_dir}"
+}
+
+mkdir -p build
+
+if [[ "$VARIANT" == "all" || "$VARIANT" == "prod" ]]; then
+  build_bundle "Rerun" "com.rerun.app"
+fi
+
+if [[ "$VARIANT" == "all" || "$VARIANT" == "dev" ]]; then
+  build_bundle "RerunDev" "com.rerun.dev"
+fi
 
 echo ""
-echo "Built: ${APP_DIR}"
-echo ""
 echo "To install:"
-echo "  cp -R ${APP_DIR} /Applications/"
-echo "  open /Applications/${BUNDLE_NAME}.app"
+if [[ "$VARIANT" == "all" || "$VARIANT" == "prod" ]]; then
+  echo "  cp -R build/Rerun.app /Applications/"
+  echo "  open /Applications/Rerun.app"
+fi
+if [[ "$VARIANT" == "all" || "$VARIANT" == "dev" ]]; then
+  echo "  cp -R build/RerunDev.app /Applications/"
+  echo "  open /Applications/RerunDev.app"
+fi

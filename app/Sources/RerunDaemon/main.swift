@@ -124,9 +124,10 @@ if CommandLine.arguments.contains("--test-embed") {
 
 // MARK: - Daemon Startup
 
+let profile = RerunProfile.current()
 let db: DatabaseManager
 do {
-    let path = try DatabaseManager.defaultPath()
+    let path = try DatabaseManager.defaultPath(profile: profile)
     db = try DatabaseManager(path: path)
 } catch {
     fputs("Failed to initialize database: \(error.localizedDescription)\n", stderr)
@@ -165,7 +166,7 @@ sigint.setEventHandler {
 sigterm.resume()
 sigint.resume()
 
-print("Rerun daemon v\(Rerun.version) starting...")
+print("Rerun daemon v\(Rerun.version) starting [profile: \(profile)]...")
 Task { @MainActor in
     do {
         try await daemon.start()
@@ -176,15 +177,17 @@ Task { @MainActor in
     }
 }
 
-if Bundle.main.bundleIdentifier != nil {
-    // Running inside .app bundle — register as login item for auto-start
-    let service = SMAppService.mainApp
-    if service.status != .enabled {
-        do {
-            try service.register()
-            print("Registered as login item")
-        } catch {
-            fputs("Login item registration failed: \(error.localizedDescription)\n", stderr)
+if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundleIdentifier) {
+    if appVariant == .production {
+        // Running inside production .app bundle — register as login item for auto-start
+        let service = SMAppService.mainApp
+        if service.status != .enabled {
+            do {
+                try service.register()
+                print("Registered as login item")
+            } catch {
+                fputs("Login item registration failed: \(error.localizedDescription)\n", stderr)
+            }
         }
     }
 

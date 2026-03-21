@@ -6,13 +6,16 @@ final class StatusBarController {
     private var statusItem: NSStatusItem?
     private weak var daemon: CaptureDaemon?
     private var statsTimer: Timer?
+    private let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+        ?? Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String
+        ?? ProcessInfo.processInfo.processName
 
     func setup(daemon: CaptureDaemon) {
         self.daemon = daemon
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "eye.circle", accessibilityDescription: "Rerun")
-        item.button?.toolTip = "Rerun"
+        item.button?.image = NSImage(systemSymbolName: "eye.circle", accessibilityDescription: appName)
+        item.button?.toolTip = appName
         item.menu = buildMenu()
         self.statusItem = item
 
@@ -30,7 +33,7 @@ final class StatusBarController {
         // Status header
         let ax = AccessibilityExtractor.isAccessibilityGranted
         let sr = OCRExtractor.isScreenRecordingGranted
-        let statusText = ax ? "Capturing" : "Missing Accessibility permission"
+        let statusText = ax ? "\(appName): Capturing" : "\(appName): Missing Accessibility permission"
         let statusItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         statusItem.isEnabled = false
         menu.addItem(statusItem)
@@ -58,7 +61,7 @@ final class StatusBarController {
 
         menu.addItem(NSMenuItem.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Rerun", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit \(appName)", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 

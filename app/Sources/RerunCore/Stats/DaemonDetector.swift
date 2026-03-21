@@ -1,8 +1,6 @@
 import Foundation
 
 public struct DaemonDetector: Sendable {
-    private static let expectedProcessNames = ["Rerun", "rerun-daemon"]
-
     public struct DaemonStatus: Sendable, Equatable {
         public let running: Bool
         public let pid: Int?
@@ -13,12 +11,13 @@ public struct DaemonDetector: Sendable {
         }
     }
 
-    public static func detect() -> DaemonStatus {
-        detect(
-            pidFileURL: RerunHome.pidFileURL(),
+    public static func detect(profile: String = RerunProfile.current()) -> DaemonStatus {
+        let expectedProcessNames = expectedProcessNames(profile: profile)
+        return detect(
+            pidFileURL: RerunHome.pidFileURL(profile: profile),
             expectedProcessNames: expectedProcessNames
         ) {
-            detectViaPgrep(expectedProcessNames: expectedProcessNames)
+            detectViaPgrep(expectedProcessNames: expectedProcessNames, profile: profile)
         }
     }
 
@@ -88,7 +87,48 @@ public struct DaemonDetector: Sendable {
         return URL(fileURLWithPath: output).lastPathComponent
     }
 
-    private static func detectViaPgrep(expectedProcessName: String) -> DaemonStatus {
+    static func commandLine(for pid: Int) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-p", "\(pid)", "-o", "command="]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return output.isEmpty ? nil : output
+    }
+
+    static func commandLine(_ commandLine: String, matchesProfile profile: String) -> Bool {
+        let profile = RerunProfile.normalized(profile)
+
+        if let explicitProfile = explicitProfile(fromCommandLine: commandLine) {
+            return explicitProfile == profile
+        }
+
+        let inferredProfile = RerunAppVariant.allCases.first(where: { variant in
+            commandLine.contains("/\(variant.appName).app/Contents/MacOS/\(variant.executableName)") ||
+            commandLine.hasSuffix("/\(variant.executableName)") ||
+            commandLine == variant.executableName
+        })?.profile ?? RerunProfile.defaultName
+
+        return inferredProfile == profile
+    }
+
+    private static func detectViaPgrep(expectedProcessName: String, profile: String) -> DaemonStatus {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
         process.arguments = ["-x", expectedProcessName]
@@ -111,21 +151,46 @@ public struct DaemonDetector: Sendable {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        if let firstLine = output.split(separator: "\n").first, let pid = Int(firstLine) {
-            return DaemonStatus(running: true, pid: pid)
+        for line in output.split(separator: "\n") {
+            guard let pid = Int(line) else { continue }
+            guard let processCommandLine = commandLine(for: pid) else { continue }
+            if commandLine(processCommandLine, matchesProfile: profile) {
+                return DaemonStatus(running: true, pid: pid)
+            }
         }
 
         return DaemonStatus(running: false, pid: nil)
     }
 
-    private static func detectViaPgrep(expectedProcessNames: [String]) -> DaemonStatus {
+    private static func detectViaPgrep(expectedProcessNames: [String], profile: String) -> DaemonStatus {
         for expectedProcessName in expectedProcessNames {
-            let status = detectViaPgrep(expectedProcessName: expectedProcessName)
+            let status = detectViaPgrep(expectedProcessName: expectedProcessName, profile: profile)
             if status.running {
                 return status
             }
         }
 
         return DaemonStatus(running: false, pid: nil)
+    }
+
+    private static func expectedProcessNames(profile: String) -> [String] {
+        var names = ["rerun-daemon"]
+        if let variant = RerunAppVariant.variant(forProfile: profile) {
+            names.insert(variant.executableName, at: 0)
+        }
+        return names
+    }
+
+    private static func explicitProfile(fromCommandLine commandLine: String) -> String? {
+        let parts = commandLine.split(separator: " ").map(String.init)
+        for (index, part) in parts.enumerated() {
+            if part == "--profile", index + 1 < parts.count {
+                return RerunProfile.normalized(parts[index + 1])
+            }
+            if part.hasPrefix("--profile=") {
+                return RerunProfile.normalized(String(part.dropFirst("--profile=".count)))
+            }
+        }
+        return nil
     }
 }

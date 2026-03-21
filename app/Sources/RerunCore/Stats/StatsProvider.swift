@@ -1,6 +1,7 @@
 import Foundation
 
 public struct RerunStats: Codable, Sendable {
+    public let profile: String
     public let version: String
     public let daemonRunning: Bool
     public let daemonPID: Int?
@@ -12,15 +13,16 @@ public struct RerunStats: Codable, Sendable {
 }
 
 public struct StatsProvider: Sendable {
-    public static func gatherStats(db: DatabaseManager) async throws -> RerunStats {
-        let daemon = DaemonDetector.detect()
+    public static func gatherStats(db: DatabaseManager, profile: String = RerunProfile.current()) async throws -> RerunStats {
+        let daemon = DaemonDetector.detect(profile: profile)
         let count = try await db.captureCount()
         let oldest = try await db.oldestCaptureTimestamp()
         let newest = try await db.newestCaptureTimestamp()
-        let dbSize = Self.fileSize(atPath: try DatabaseManager.defaultPath())
-        let capturesSize = Self.directorySize(at: RerunHome.capturesURL())
+        let dbSize = Self.fileSize(atPath: try DatabaseManager.defaultPath(profile: profile))
+        let capturesSize = Self.directorySize(at: RerunHome.capturesURL(profile: profile))
 
         return RerunStats(
+            profile: profile,
             version: Rerun.version,
             daemonRunning: daemon.running,
             daemonPID: daemon.pid,

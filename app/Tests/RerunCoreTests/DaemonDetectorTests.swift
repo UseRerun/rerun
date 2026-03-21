@@ -60,6 +60,15 @@ struct DaemonDetectorTests {
         #expect(FileManager.default.fileExists(atPath: pidFileURL.path))
     }
 
+    @Test func commandLineProfileMatchingSeparatesDefaultAndDev() {
+        #expect(DaemonDetector.commandLine("/tmp/rerun-daemon", matchesProfile: "default"))
+        #expect(DaemonDetector.commandLine("/tmp/rerun-daemon --profile dev", matchesProfile: "default") == false)
+        #expect(DaemonDetector.commandLine("/tmp/rerun-daemon --profile dev", matchesProfile: "dev"))
+        #expect(DaemonDetector.commandLine("/tmp/rerun-daemon --profile=qa", matchesProfile: "qa"))
+        #expect(DaemonDetector.commandLine("/Applications/RerunDev.app/Contents/MacOS/RerunDev", matchesProfile: "dev"))
+        #expect(DaemonDetector.commandLine("/Applications/RerunDev.app/Contents/MacOS/RerunDev", matchesProfile: "default") == false)
+    }
+
     private func makeTempPIDFileURL() -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

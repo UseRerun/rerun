@@ -37,19 +37,14 @@ public actor DatabaseManager {
         try self.init(path: path)
     }
 
-    /// Default database path: ~/Library/Application Support/Rerun/rerun.db
-    public static func defaultPath() throws -> String {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!.appendingPathComponent("Rerun", isDirectory: true)
-
+    /// Default database path. Default profile: ~/Library/Application Support/Rerun/rerun.db
+    public static func defaultPath(profile: String = RerunProfile.current()) throws -> String {
+        let appSupport = RerunHome.appSupportURL(profile: profile)
         try FileManager.default.createDirectory(
             at: appSupport,
             withIntermediateDirectories: true
         )
-
-        return appSupport.appendingPathComponent("rerun.db").path
+        return RerunHome.databaseURL(profile: profile).path
     }
 
     // MARK: - Migrations

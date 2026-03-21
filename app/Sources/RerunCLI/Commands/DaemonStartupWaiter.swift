@@ -5,7 +5,7 @@ enum DaemonStartupWaiter {
     static func waitUntilRunning(
         maxAttempts: Int = 50,
         pollInterval: Duration = .milliseconds(100),
-        detect: () -> DaemonDetector.DaemonStatus = DaemonDetector.detect,
+        detect: () -> DaemonDetector.DaemonStatus = { DaemonDetector.detect() },
         sleep: (Duration) async -> Void = { duration in
             try? await Task.sleep(for: duration)
         }
