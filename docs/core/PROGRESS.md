@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 5 - Completed
+## Status: Phase 6 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -174,13 +174,31 @@
 ---
 
 ### Phase 6: Markdown File Writer
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `MarkdownWriter` struct in RerunCore/Storage/
+- [x] Implemented `RerunHome` enum with `RERUN_HOME` env var support, default `~/rerun/`
+- [x] Creates directory structure: `~/rerun/captures/YYYY/MM/DD/`
+- [x] Writes each capture as `HH-MM-SS.md` with YAML frontmatter (id, timestamp, app, bundle_id, window, url, source, trigger)
+- [x] Body = captured text_content
+- [x] Handles file naming collisions (appends `-2`, `-3` for same-second captures)
+- [x] Stores relative `markdownPath` on Capture struct before SQLite insert
+- [x] Wired into CaptureDaemon pipeline (after building Capture, before DB insert)
+- [x] Markdown write failure logs error and skips indexing so files remain canonical
+- [x] Files written atomically as UTF-8
+- [x] Window titles quoted and escaped in YAML frontmatter
+- [x] Optional fields (bundleId, windowTitle, url) omitted from frontmatter when nil
+- [x] 5 new tests: writeBasicCapture, collisionHandling, optionalFieldsOmitted, windowTitleEscaping, relativePathFormat
+- [x] All 30 tests passing, zero build warnings
 
 #### Decisions Made
-- (none yet)
+- **MarkdownWriter in RerunCore, not RerunDaemon:** Reusable by CLI export, agent file generator, etc.
+- **baseURL injection for testability:** `MarkdownWriter(baseURL:)` accepts optional override; tests use temp dirs instead of manipulating env vars.
+- **Set markdownPath before insert, not update after:** Simpler — one DB write instead of insert + update. Path is deterministic from timestamp.
+- **Markdown failure is fatal for that capture:** Files are the source of truth; never create SQLite-only rows.
+- **Manual YAML rendering:** No YAML library needed — all values are simple scalars. Window titles get quoted/escaped for safety.
+- **Caseless enum for RerunHome:** Matches existing `Rerun` namespace pattern. No instances, just static methods.
 
 #### Blockers
 - (none)
@@ -348,6 +366,12 @@
 - Stats logging every 5 minutes (captures, dedup count, trigger breakdown)
 - Updated main.swift to wire up DatabaseManager → CaptureOrchestrator → CaptureDaemon
 - Zero warnings, 25 tests passing
+- Completed Phase 6: Markdown file writer
+- MarkdownWriter + RerunHome in RerunCore/Storage/
+- Writes captures as .md files with YAML frontmatter to ~/rerun/captures/YYYY/MM/DD/HH-MM-SS.md
+- RERUN_HOME env var override, collision handling (-2, -3 suffixes), atomic writes
+- Wired into CaptureDaemon pipeline (markdown-first; failures skip SQLite indexing)
+- 5 new tests, 30 total passing, zero warnings
 
 ---
 
@@ -367,6 +391,10 @@
 - `app/Sources/RerunDaemon/main.swift` (updated — added --test-ocr and --test-capture flags)
 - `app/Sources/RerunDaemon/CaptureDaemon.swift` (new — capture daemon with trigger, dedup, store)
 - `app/Sources/RerunDaemon/main.swift` (updated — wired up DatabaseManager + CaptureDaemon)
+- `app/Sources/RerunCore/Storage/RerunHome.swift` (new — RERUN_HOME resolution)
+- `app/Sources/RerunCore/Storage/MarkdownWriter.swift` (new — markdown file writer with YAML frontmatter)
+- `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — wired in MarkdownWriter before DB insert)
+- `app/Tests/RerunCoreTests/MarkdownWriterTests.swift` (new — 5 tests)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

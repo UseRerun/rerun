@@ -99,7 +99,7 @@ final class CaptureDaemon {
 
             // Build and store capture
             let now = ISO8601DateFormatter().string(from: Date())
-            let capture = Capture(
+            var capture = Capture(
                 timestamp: now,
                 appName: result.appName,
                 bundleId: result.bundleId,
@@ -111,6 +111,15 @@ final class CaptureDaemon {
                 textHash: hash
             )
 
+            // Write markdown file
+            do {
+                let writer = MarkdownWriter()
+                capture.markdownPath = try writer.write(capture)
+            } catch {
+                logger.error("Markdown write failed; capture skipped: \(error.localizedDescription)")
+                return
+            }
+
             do {
                 try await db.insertCapture(capture)
                 totalCaptures += 1
@@ -121,7 +130,7 @@ final class CaptureDaemon {
                 }
                 logger.info("Captured \(result.appName) via \(result.source.rawValue) [\(trigger)] \(result.text.count) chars")
             } catch {
-                logger.error("DB insert failed: \(error.localizedDescription)")
+                logger.error("SQLite index insert failed: \(error.localizedDescription)")
             }
         }
     }
