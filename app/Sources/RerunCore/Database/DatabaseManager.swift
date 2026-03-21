@@ -1,10 +1,15 @@
 import Foundation
 import GRDB
+import CSQLiteVec
 
 public actor DatabaseManager {
     private let dbPool: DatabasePool
 
     public init(path: String) throws {
+        try self.init(path: path, extraPrepareDatabase: nil)
+    }
+
+    init(path: String, extraPrepareDatabase: (@Sendable (Database) throws -> Void)? = nil) throws {
         let dir = (path as NSString).deletingLastPathComponent
         try FileManager.default.createDirectory(
             atPath: dir,
@@ -14,6 +19,13 @@ public actor DatabaseManager {
         var config = Configuration()
         config.foreignKeysEnabled = true
         config.maximumReaderCount = 5
+        config.prepareDatabase { db in
+            let rc = sqlite3_vec_init(db.sqliteConnection, nil, nil)
+            guard rc == SQLITE_OK else {
+                throw DatabaseError(message: "sqlite-vec init failed: \(rc)")
+            }
+            try extraPrepareDatabase?(db)
+        }
 
         dbPool = try DatabasePool(path: path, configuration: config)
         try Self.migrator().migrate(dbPool)
@@ -120,6 +132,15 @@ public actor DatabaseManager {
             )
         }
 
+        migrator.registerMigration("v1-captures-vec") { db in
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE captures_vec USING vec0(
+                    capture_id TEXT PRIMARY KEY,
+                    embedding FLOAT[512]
+                )
+                """)
+        }
+
         return migrator
     }
 
@@ -224,6 +245,48 @@ public actor DatabaseManager {
             arguments.append(limit)
 
             return try Capture.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+        }
+    }
+
+    // MARK: - Vector Embeddings
+
+    public func insertEmbedding(captureId: String, embedding: [Float]) throws {
+        try dbPool.write { db in
+            let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+            try db.execute(
+                sql: "INSERT INTO captures_vec(capture_id, embedding) VALUES (?, ?)",
+                arguments: [captureId, blob]
+            )
+        }
+    }
+
+    public func findSimilar(to embedding: [Float], limit: Int = 20) throws -> [(captureId: String, distance: Float)] {
+        try dbPool.read { db in
+            let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT capture_id, distance
+                FROM captures_vec
+                WHERE embedding MATCH ? AND k = ?
+                ORDER BY distance
+                """, arguments: [blob, limit])
+            return rows.map { ($0["capture_id"], $0["distance"]) }
+        }
+    }
+
+    public func findSimilarCaptures(to embedding: [Float], limit: Int = 20) throws -> [Capture] {
+        try dbPool.read { db in
+            let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+            return try Capture.fetchAll(db, sql: """
+                SELECT capture.*
+                FROM (
+                    SELECT capture_id, distance
+                    FROM captures_vec
+                    WHERE embedding MATCH ? AND k = ?
+                    ORDER BY distance
+                ) AS vec
+                JOIN capture ON capture.id = vec.capture_id
+                ORDER BY vec.distance
+                """, arguments: [blob, limit])
         }
     }
 

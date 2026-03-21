@@ -18,9 +18,17 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CSQLiteVec",
+            dependencies: [],
+            cSettings: [
+                .define("SQLITE_CORE"),
+            ]
+        ),
+        .target(
             name: "RerunCore",
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
+                "CSQLiteVec",
             ]
         ),
         .executableTarget(

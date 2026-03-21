@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 9 - Completed
+## Status: Phase 10 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -301,13 +301,32 @@
 ---
 
 ### Phase 10: Semantic Embeddings Pipeline
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Bundled sqlite-vec v0.1.7 amalgamation as a C target (`CSQLiteVec`) in Package.swift
+- [x] Registered sqlite-vec extension on every GRDB connection via `config.prepareDatabase`
+- [x] Created `captures_vec` virtual table migration (vec0, 512-dim FLOAT, capture_id PK)
+- [x] Created `EmbeddingGenerator` in RerunCore/Search/ using `NLContextualEmbedding`
+- [x] Verified `NLContextualEmbedding` availability check (available macOS 14+, not 26+ as originally assumed)
+- [x] Implemented text chunking by paragraph (~1000 chars per chunk)
+- [x] Implemented token embedding averaging per chunk + cross-chunk averaging
+- [x] Added `insertEmbedding(captureId:embedding:)` to DatabaseManager
+- [x] Added `findSimilar(to:limit:)` returning (captureId, distance) tuples
+- [x] Added `findSimilarCaptures(to:limit:)` returning full Capture objects via JOIN
+- [x] Wired embedding generation into CaptureDaemon as async fire-and-forget (`Task.detached`)
+- [x] 13 new tests, 71 total passing
+- [x] Zero build warnings
 
 #### Decisions Made
-- (none yet)
+- **sqlite-vec as C target, not dynamic extension:** Compiled with `SQLITE_CORE` so it calls sqlite3 functions directly. GRDB bundles SQLite, symbols resolve at link time.
+- **`config.prepareDatabase` for extension registration:** Runs on every connection in the pool. Perfect for per-connection extensions like sqlite-vec.
+- **`k = ?` in WHERE clause:** sqlite-vec requires `k = ?` constraint for KNN queries (not `LIMIT ?`), especially in JOINed queries.
+- **Subquery for findSimilarCaptures:** JOIN with vec0 requires the KNN query in a subquery to avoid sqlite-vec constraint errors.
+- **NLContextualEmbedding available macOS 14+:** Research docs incorrectly stated macOS 26+ requirement. No `@available` guards needed since Package.swift targets macOS 15+.
+- **Fire-and-forget embedding:** `Task.detached` after successful DB insert. Embedding failure silently ignored — capture is already stored and searchable via FTS5.
+- **Methods on DatabaseManager, not separate VectorStore:** Same database, same pool, same pattern.
+- **`EmbeddingGenerator.isAvailable` static check:** Matches existing pattern (`AccessibilityExtractor.isAccessibilityGranted`).
 
 #### Blockers
 - (none)
@@ -450,6 +469,16 @@
 - Human-readable output with timestamp, app, window title, URL, snippet
 - Exit code 4 for no results
 - 8 new tests (search + snippets), 54 total passing, zero warnings
+- Completed Phase 10: Semantic embeddings pipeline
+- Bundled sqlite-vec v0.1.7 as CSQLiteVec C target (compiled with SQLITE_CORE)
+- Registered sqlite-vec on every GRDB connection via config.prepareDatabase
+- captures_vec virtual table (vec0, FLOAT[512], capture_id TEXT PK)
+- EmbeddingGenerator using NLContextualEmbedding (available macOS 14+, not 26+ as research stated)
+- Text chunking by paragraph (~1000 chars), token averaging, chunk averaging
+- Three new DatabaseManager methods: insertEmbedding, findSimilar, findSimilarCaptures
+- sqlite-vec KNN queries use `k = ?` in WHERE (not LIMIT), subquery for JOINs
+- Fire-and-forget embedding in CaptureDaemon via Task.detached after DB insert
+- 13 new tests, 71 total passing, zero warnings
 
 ---
 
@@ -490,6 +519,13 @@
 - `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — COLLATE NOCASE for app filtering)
 - `app/Sources/RerunCLI/RerunCommand.swift` (updated — registered SearchCommand)
 - `app/Tests/RerunCoreTests/SearchTests.swift` (new — 8 tests)
+- `app/Sources/CSQLiteVec/sqlite-vec.c` (new — sqlite-vec v0.1.7 amalgamation)
+- `app/Sources/CSQLiteVec/include/sqlite-vec.h` (new — sqlite-vec public header)
+- `app/Package.swift` (updated — added CSQLiteVec C target, added to RerunCore deps)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — prepareDatabase for sqlite-vec, captures_vec migration, 3 vector methods)
+- `app/Sources/RerunCore/Search/EmbeddingGenerator.swift` (new — NLContextualEmbedding wrapper with chunking + averaging)
+- `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — fire-and-forget embedding generation after capture insert)
+- `app/Tests/RerunCoreTests/EmbeddingTests.swift` (new — 15 tests)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

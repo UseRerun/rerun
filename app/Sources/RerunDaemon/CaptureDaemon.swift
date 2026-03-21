@@ -151,6 +151,19 @@ final class CaptureDaemon {
                     timerCaptures += 1
                 }
                 logger.info("Captured \(result.appName) via \(result.source.rawValue) [\(trigger)] \(result.text.count) chars")
+
+                // Generate embedding async, non-blocking
+                if EmbeddingGenerator.isAvailable {
+                    let captureId = capture.id
+                    let text = capture.textContent
+                    let database = db
+                    Task.detached {
+                        let generator = EmbeddingGenerator()
+                        if let embedding = generator.embed(text) {
+                            try? await database.insertEmbedding(captureId: captureId, embedding: embedding)
+                        }
+                    }
+                }
             } catch {
                 logger.error("SQLite index insert failed: \(error.localizedDescription)")
             }
