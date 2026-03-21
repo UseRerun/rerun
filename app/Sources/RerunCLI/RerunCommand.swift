@@ -9,6 +9,7 @@ struct RerunCommand: AsyncParsableCommand {
         version: Rerun.version,
         subcommands: [
             StatusCommand.self,
+            SearchCommand.self,
         ]
     )
 }

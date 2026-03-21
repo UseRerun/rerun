@@ -190,6 +190,10 @@ public actor DatabaseManager {
         limit: Int = 20
     ) throws -> [Capture] {
         try dbPool.read { db in
+            guard limit > 0 else {
+                return []
+            }
+
             guard let pattern = FTS5Pattern(matchingAllPrefixesIn: query) else {
                 return []
             }
@@ -204,11 +208,11 @@ public actor DatabaseManager {
 
             var conditions: [String] = []
             if let app {
-                conditions.append("capture.appName = ?")
+                conditions.append("capture.appName = ? COLLATE NOCASE")
                 arguments.append(app)
             }
             if let since {
-                conditions.append("capture.timestamp >= ?")
+                conditions.append("julianday(capture.timestamp) >= julianday(?)")
                 arguments.append(since)
             }
 
