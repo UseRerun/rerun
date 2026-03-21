@@ -1,6 +1,6 @@
 # Chat UI Progress
 
-## Status: Phase 1 - Complete
+## Status: Phase 2 - Complete
 
 ## Quick Reference
 - Research: `docs/chat-ui/RESEARCH.md`
@@ -35,13 +35,22 @@
 ---
 
 ### Phase 2: Chat UI (SwiftUI)
-**Status:** Not Started
+**Status:** Complete
 
 #### Tasks Completed
-- (none yet)
+- Created `Chat/ChatMessage.swift` — ChatMessage, MessageRole, SourceReference data types (all Sendable)
+- Created `Chat/ChatViewModel.swift` — @Observable @MainActor view model with send(), newConversation(), 300ms echo delay
+- Created `Chat/MessageBubble.swift` — role-based alignment and colors, relative timestamps, rounded bubble shape
+- Created `Chat/ChatView.swift` — ScrollViewReader message list, auto-scroll, @FocusState text input, empty state, ProgressView spinner
+- Modified `ChatPanel.swift` — replaced placeholder with real ChatView, added Notification.Name.chatPanelDidShow, ViewModel owned by panel
 
 #### Decisions Made
-- (none yet)
+- Used `@Observable` (macOS 14+) instead of ObservableObject/@Published — simpler, more performant
+- Used `@Bindable` on ChatView's viewModel property for TextField binding
+- 300ms echo delay to make isProcessing visible and set expectations for Phase 3+ latency
+- SourceReference defined now (empty in Phase 2) so Phase 3 just fills in data without model changes
+- Chat/ subdirectory for organization — mirrors RerunCore pattern, keeps daemon target clean as chat files grow
+- Notification-based re-focus pattern — ChatPanel posts .chatPanelDidShow, ChatView observes it to re-assert @FocusState
 
 #### Blockers
 - (none)
@@ -94,15 +103,20 @@
 
 ### 2026-03-21
 - Implemented Phase 1: floating NSPanel + global hotkey + menubar integration
+- Implemented Phase 2: SwiftUI chat interface with message list, text input, echo responses
 - Build compiles clean with Swift 6 strict concurrency
 
 ---
 
 ## Files Changed
-- `Sources/RerunDaemon/ChatPanel.swift` (new)
-- `Sources/RerunDaemon/HotkeyManager.swift` (new)
-- `Sources/RerunDaemon/StatusBarController.swift` (modified — added chatPanel property, setChatPanel, toggleChat, Chat... menu item)
-- `Sources/RerunDaemon/main.swift` (modified — create ChatPanel and HotkeyManager after StatusBarController setup)
+- `Sources/RerunDaemon/ChatPanel.swift` (new in P1, modified in P2 — replaced placeholder with ChatView)
+- `Sources/RerunDaemon/HotkeyManager.swift` (new in P1)
+- `Sources/RerunDaemon/StatusBarController.swift` (modified in P1 — added chatPanel property, setChatPanel, toggleChat, Chat... menu item)
+- `Sources/RerunDaemon/main.swift` (modified in P1 — create ChatPanel and HotkeyManager after StatusBarController setup)
+- `Sources/RerunDaemon/Chat/ChatMessage.swift` (new in P2)
+- `Sources/RerunDaemon/Chat/ChatViewModel.swift` (new in P2)
+- `Sources/RerunDaemon/Chat/ChatView.swift` (new in P2)
+- `Sources/RerunDaemon/Chat/MessageBubble.swift` (new in P2)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
