@@ -1,6 +1,7 @@
 import RerunCore
 import Foundation
 import AppKit
+import Dispatch
 
 // Quick AX diagnostic if --test-ax flag is passed
 if CommandLine.arguments.contains("--test-ax") {
@@ -135,12 +136,41 @@ let orchestrator = CaptureOrchestrator()
 let exclusionManager = ExclusionManager(db: db)
 let daemon = CaptureDaemon(orchestrator: orchestrator, db: db, exclusionManager: exclusionManager)
 
+// Write PID file
+let pidURL = RerunHome.pidFileURL()
+let pidDir = pidURL.deletingLastPathComponent()
+try? FileManager.default.createDirectory(at: pidDir, withIntermediateDirectories: true)
+try? "\(ProcessInfo.processInfo.processIdentifier)".write(to: pidURL, atomically: true, encoding: .utf8)
+
+// Signal handling for graceful shutdown
+signal(SIGTERM, SIG_IGN)
+signal(SIGINT, SIG_IGN)
+
+let sigterm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+
+let shutdown: @MainActor () -> Void = {
+    daemon.stop()
+    try? FileManager.default.removeItem(at: RerunHome.pidFileURL())
+    exit(0)
+}
+
+sigterm.setEventHandler {
+    MainActor.assumeIsolated { shutdown() }
+}
+sigint.setEventHandler {
+    MainActor.assumeIsolated { shutdown() }
+}
+sigterm.resume()
+sigint.resume()
+
 print("Rerun daemon v\(Rerun.version) starting...")
 Task { @MainActor in
     do {
         try await daemon.start()
     } catch {
         fputs("Failed to start daemon: \(error.localizedDescription)\n", stderr)
+        try? FileManager.default.removeItem(at: RerunHome.pidFileURL())
         exit(1)
     }
 }

@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 13 - Completed
+## Status: Phase 14 - Revised
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -385,8 +385,8 @@
 - [x] 3 new database tests, 95 total passing, zero warnings
 
 #### Decisions Made
-- **File-based pause over IPC:** Touch/remove `~/Library/Application Support/Rerun/paused` file. Daemon checks on each capture cycle. No socket, no signals. Phase 14 (LaunchAgent) will bring proper lifecycle.
-- **start/stop via Process+kill:** `rerun start` spawns sibling binary via `Bundle.main.executableURL`. `rerun stop` sends SIGTERM via PID from `DaemonDetector`. Bare-bones, replaced by LaunchAgent in Phase 14.
+- **File-based pause over IPC:** Touch/remove `~/Library/Application Support/Rerun/paused` file. Daemon checks on each capture cycle. No socket, no signals.
+- **start/stop via Process+kill:** `rerun start` spawns sibling binary via `Bundle.main.executableURL`. `rerun stop` sends SIGTERM via PID from `DaemonDetector`. LaunchAgent was tested in Phase 14, then reverted after breaking TCC-based capture permissions.
 - **Config read-only:** No config store exists yet. Display derived values only. `config set` deferred until there's something to set.
 - **Summary without AI:** Phase 13 adds Foundation Models summarization. Phase 12 shows capture counts grouped by app — useful stats without AI dependency.
 - **Export to stdout:** User redirects to file (`rerun export --format csv > captures.csv`). No `--output` flag needed.
@@ -433,17 +433,43 @@
 
 ---
 
-### Phase 14: Daemon Lifecycle (LaunchAgent)
+### Phase 14: Daemon Lifecycle Hardening
+**Status:** Revised
+
+#### Tasks Completed
+- [x] Daemon writes PID file to `~/Library/Application Support/Rerun/daemon.pid` on startup
+- [x] Signal handling: SIGTERM + SIGINT via `DispatchSource.makeSignalSource` → graceful `daemon.stop()` + PID file cleanup
+- [x] `DaemonDetector` reads PID file first, validates process name, cleans up stale PID files, falls back to pgrep
+- [x] `RerunHome.pidFileURL()` added matching existing `pauseFileURL()` pattern
+- [x] PID file removed on daemon startup failure
+- [x] LaunchAgent experiment tested, then reverted after losing Screen Recording / Accessibility access in background-agent context
+- [x] `rerun start` restored to direct sibling process launch
+- [x] `rerun stop` removes any legacy LaunchAgent install before stopping the daemon
+- [x] 103 tests passing, zero build warnings
+
+#### Decisions Made
+- **Reverted LaunchAgent startup:** On this build, the LaunchAgent process lost Screen Recording / Accessibility access that the interactive parent process had. Captures resumed immediately after switching back to direct child-process launch.
+- **Keep PID file + signal handling:** These fixes are still useful without LaunchAgent. They make `status`/`stop` faster and more reliable.
+- **PID file must validate process identity:** `kill(pid, 0)` alone is not enough; stale PIDs can be reused by unrelated processes.
+- **Legacy LaunchAgent cleanup stays:** `start`/`stop` remove old `~/Library/LaunchAgents/com.rerun.daemon.plist` installs so users do not stay stuck on the broken path.
+
+#### Blockers
+- (none)
+
+---
+
+### Phase 14.5: Permission-Safe Auto-Start App Shell
 **Status:** Not Started
 
 #### Tasks Completed
 - (none yet)
 
 #### Decisions Made
-- (none yet)
+- **Planned direction:** Replace plain LaunchAgent auto-start with a signed macOS app shell (`LSUIElement`) or bundled login item registered via `SMAppService`, so Screen Recording / Accessibility permissions attach to a stable app identity.
+- **CLI role shrinks:** CLI should control the long-running app via IPC/XPC/local socket, not own capture directly when auto-start is enabled.
 
 #### Blockers
-- (none)
+- Need a minimal macOS app target / bundle identity before this phase can start
 
 ---
 
@@ -569,6 +595,15 @@
 - SummaryCommand: --regenerate flag forces fresh generation
 - 98 tests passing, zero warnings
 
+- Revised Phase 14: daemon lifecycle hardening
+- LaunchAgent startup tested, then reverted after background-agent permissions blocked new captures
+- `rerun start` back to direct sibling-process launch
+- `rerun stop` removes any legacy LaunchAgent install, then SIGTERMs daemon PID
+- Daemon PID file at ~/Library/Application Support/Rerun/daemon.pid
+- Signal handling: SIGTERM/SIGINT via DispatchSource → daemon.stop() + PID cleanup + exit(0)
+- DaemonDetector: PID file first + process-name validation, stale cleanup, pgrep fallback
+- 103 tests passing, zero warnings
+
 ---
 
 ## Files Changed
@@ -638,6 +673,14 @@
 - `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — added topURLs(since:limit:))
 - `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — added agent file timers: 30min today.md, 1hr index.md, generate on start)
 - `app/Sources/RerunCLI/Commands/SummaryCommand.swift` (updated — added --regenerate flag)
+
+- `app/Sources/RerunCore/Stats/LaunchAgentManager.swift` (new — legacy LaunchAgent cleanup only)
+- `app/Sources/RerunCore/Storage/RerunHome.swift` (updated — added pidFileURL())
+- `app/Sources/RerunCore/Stats/DaemonDetector.swift` (updated — PID file detection with process-name validation, stale cleanup, pgrep fallback)
+- `app/Sources/RerunCore/Stats/StatsProvider.swift` (updated — daemon stats without LaunchAgent status)
+- `app/Sources/RerunDaemon/main.swift` (updated — PID file write, SIGTERM/SIGINT signal handlers, graceful shutdown)
+- `app/Sources/RerunCLI/Commands/DaemonCommands.swift` (updated — start/stop use direct process launch again, with legacy LaunchAgent cleanup)
+- `app/Sources/RerunCLI/Commands/StatusCommand.swift` (updated — status output simplified after LaunchAgent rollback)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

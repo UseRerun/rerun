@@ -12,6 +12,15 @@ struct StartCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
+        if LaunchAgentManager.isInstalled() {
+            do {
+                try LaunchAgentManager.uninstall()
+            } catch {
+                print("Failed to remove legacy LaunchAgent: \(error)")
+                throw ExitCode(1)
+            }
+        }
+
         let status = DaemonDetector.detect()
         let formatter = OutputFormatter(json: json)
 
@@ -67,10 +76,30 @@ struct StopCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let status = DaemonDetector.detect()
         let formatter = OutputFormatter(json: json)
+        let hadLaunchAgent = LaunchAgentManager.isInstalled()
+
+        if hadLaunchAgent {
+            do {
+                try LaunchAgentManager.uninstall()
+            } catch {
+                print("Failed to remove legacy LaunchAgent: \(error)")
+                throw ExitCode(1)
+            }
+        }
+
+        let status = DaemonDetector.detect()
 
         guard status.running, let pid = status.pid else {
+            if hadLaunchAgent {
+                if formatter.useJSON {
+                    try formatter.printJSON(["status": "stopped"])
+                } else {
+                    print("Daemon stopped")
+                }
+                return
+            }
+
             if formatter.useJSON {
                 try formatter.printJSON(["status": "not_running"])
             } else {
