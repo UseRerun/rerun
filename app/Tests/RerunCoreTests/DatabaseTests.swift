@@ -344,6 +344,42 @@ struct DatabaseTests {
         #expect(top[1].count == 3)
     }
 
+    @Test func topURLs() async throws {
+        let db = try makeDB()
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+
+        for i in 0..<4 {
+            try await db.insertCapture(Capture(
+                timestamp: formatter.string(from: now.addingTimeInterval(TimeInterval(-i))),
+                appName: "Safari",
+                url: "https://example.com/docs",
+                textSource: "accessibility",
+                captureTrigger: "idle",
+                textContent: "docs \(i)",
+                textHash: "d\(i)"
+            ))
+        }
+        for i in 0..<2 {
+            try await db.insertCapture(Capture(
+                timestamp: formatter.string(from: now.addingTimeInterval(TimeInterval(-60 - i))),
+                appName: "Safari",
+                url: "https://example.com/blog",
+                textSource: "accessibility",
+                captureTrigger: "idle",
+                textContent: "blog \(i)",
+                textHash: "b\(i)"
+            ))
+        }
+
+        let top = try await db.topURLs()
+        #expect(top.count == 2)
+        #expect(top[0].url == "https://example.com/docs")
+        #expect(top[0].count == 4)
+        #expect(top[1].url == "https://example.com/blog")
+        #expect(top[1].count == 2)
+    }
+
     @Test func captureStatsWithSince() async throws {
         let db = try makeDB()
         let formatter = ISO8601DateFormatter()

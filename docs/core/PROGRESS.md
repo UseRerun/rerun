@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 12 - Completed
+## Status: Phase 13 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -400,13 +400,33 @@
 ---
 
 ### Phase 13: today.md + index.md Agent Files
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Created `AgentFileGenerator` struct in RerunCore/Agent/
+- [x] `generateTodayMd(db:)`: queries all captures since midnight, buckets into overnight/morning/afternoon/evening time blocks
+- [x] Foundation Models summarization via `LanguageModelSession.respond(to:)` — generates 2-3 sentence prose summaries per time block + overall
+- [x] Gated with `#if canImport(FoundationModels)` + `@available(macOS 26, *)` — structured-only output when LLM unavailable
+- [x] today.md includes: YAML frontmatter (generated, period, captures), summary, overnight/morning/afternoon/evening time blocks, apps table, key URLs list
+- [x] `generateIndexMd(db:)`: total captures, date range, structure explanation, quick access links
+- [x] index.md includes: YAML frontmatter (generated, total_captures, oldest/newest), stats, file structure docs
+- [x] Added `topURLs(since:limit:)` to DatabaseManager (groups URLs by frequency)
+- [x] Scheduled generation in CaptureDaemon: today.md every 30 min, index.md every 1 hour, both on daemon startup
+- [x] `rerun summary --regenerate` forces fresh generation of both files
+- [x] `rerun summary --today --regenerate` regenerates only today.md
+- [x] Prompt data builder: samples up to 20 captures (200 chars each), includes unique apps, window titles, URLs
+- [x] All 98 existing tests passing, zero build warnings
+- [x] Manual verification: both files generated at ~/rerun/ with correct content and Foundation Models summaries
 
 #### Decisions Made
-- (none yet)
+- **Struct, not actor:** `AgentFileGenerator` is stateless — all state lives in DatabaseManager. Matches `HybridSearch`, `MarkdownWriter` pattern.
+- **`LanguageModelSession.respond(to:)` for prose, not `@Generable`:** Summaries are free-form text, not structured data. No need for `@Generable` schema.
+- **Structured-only when no LLM:** Not a "fallback" — the same data (apps, URLs, counts) is always present. LLM adds prose on top. If LLM unavailable or fails, sections show "N captures across App1, App2, App3."
+- **Sampled prompt data:** Send metadata (apps, titles, URLs) for all captures, but only sample text content from up to 20 captures (200 chars each) to stay within token limits.
+- **Two separate timers:** Matches existing `startStatsTimer()` pattern. today.md updates more frequently (30 min) since it's the primary agent file.
+- **Fire-and-forget generation:** `Task.detached` with `try?` — generation failure should never crash the daemon or block capture.
+- **Atomic file writes:** `String.write(to:atomically:encoding:)` — same as MarkdownWriter. Overwrite on each generation (rolling summary, not append-only).
+- **`topURLs` as new DB method:** Simple SQL aggregation mirroring `topApps`. Only new DatabaseManager method needed — everything else already existed.
 
 #### Blockers
 - (none)
@@ -539,6 +559,16 @@
 - 3 new DB methods: `fetchCapture(closestTo:)`, `fetchCaptures(since:limit:)`, `topApps(since:limit:)`
 - 3 new database tests, 95 total passing, zero warnings
 
+- Completed Phase 13: today.md + index.md agent files
+- AgentFileGenerator struct in RerunCore/Agent/ with generateTodayMd + generateIndexMd
+- Foundation Models summarization via LanguageModelSession.respond(to:) for free-form prose summaries
+- today.md: YAML frontmatter, overall summary, overnight/morning/afternoon/evening time blocks, apps table, key URLs
+- index.md: YAML frontmatter, structure docs, total captures, date range, quick access links
+- New DatabaseManager method: topURLs(since:limit:) for URL frequency aggregation
+- CaptureDaemon: two new timers (30min today.md, 1hr index.md), generate on startup
+- SummaryCommand: --regenerate flag forces fresh generation
+- 98 tests passing, zero warnings
+
 ---
 
 ## Files Changed
@@ -603,6 +633,11 @@
 - `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — added pause file check in performCapture())
 - `app/Sources/RerunCLI/RerunCommand.swift` (updated — registered 9 new commands)
 - `app/Tests/RerunCoreTests/DatabaseTests.swift` (updated — 3 new tests: fetchCaptureClosestTo, fetchCapturesWithSince, topApps)
+
+- `app/Sources/RerunCore/Agent/AgentFileGenerator.swift` (new — today.md + index.md generation with Foundation Models summarization)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — added topURLs(since:limit:))
+- `app/Sources/RerunDaemon/CaptureDaemon.swift` (updated — added agent file timers: 30min today.md, 1hr index.md, generate on start)
+- `app/Sources/RerunCLI/Commands/SummaryCommand.swift` (updated — added --regenerate flag)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

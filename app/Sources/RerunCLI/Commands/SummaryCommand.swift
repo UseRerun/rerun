@@ -17,6 +17,9 @@ struct SummaryCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Show today's summary.")
     var today = false
 
+    @Flag(name: .long, help: "Regenerate agent summary files (today.md, index.md).")
+    var regenerate = false
+
     @Flag(name: .long, help: "Output as JSON.")
     var json = false
 
@@ -26,6 +29,22 @@ struct SummaryCommand: AsyncParsableCommand {
     func run() async throws {
         let formatter = OutputFormatter(json: json, noColor: noColor)
         let db = try DatabaseManager(path: DatabaseManager.defaultPath())
+
+        if regenerate {
+            let gen = AgentFileGenerator()
+            try await gen.generateTodayMd(db: db)
+            var regeneratedFiles = [RerunHome.baseURL().appendingPathComponent("today.md").path]
+            if !today {
+                try await gen.generateIndexMd(db: db)
+                regeneratedFiles.append(RerunHome.baseURL().appendingPathComponent("index.md").path)
+            }
+            if formatter.useJSON {
+                try formatter.printJSON(RegenerateResult(status: "regenerated", files: regeneratedFiles))
+            } else {
+                print(today ? "Regenerated ~/rerun/today.md" : "Regenerated ~/rerun/today.md and ~/rerun/index.md")
+            }
+            return
+        }
 
         if today {
             try await showToday(db: db, formatter: formatter)
@@ -124,6 +143,11 @@ private struct SummaryResult: Codable {
     let apps: [AppCount]
     let oldestCapture: String?
     let newestCapture: String?
+}
+
+private struct RegenerateResult: Codable {
+    let status: String
+    let files: [String]
 }
 
 private struct AppCount: Codable {
