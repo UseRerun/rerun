@@ -152,6 +152,26 @@ public actor DatabaseManager {
         }
     }
 
+    public func oldestCaptureTimestamp() throws -> String? {
+        try dbPool.read { db in
+            try Capture
+                .order(Capture.Columns.timestamp.asc)
+                .limit(1)
+                .fetchOne(db)?
+                .timestamp
+        }
+    }
+
+    public func newestCaptureTimestamp() throws -> String? {
+        try dbPool.read { db in
+            try Capture
+                .order(Capture.Columns.timestamp.desc)
+                .limit(1)
+                .fetchOne(db)?
+                .timestamp
+        }
+    }
+
     public func latestHashForApp(_ appName: String) throws -> String? {
         try dbPool.read { db in
             try Capture
