@@ -37,4 +37,15 @@ public enum DefaultExclusions {
     static let firefoxPrivateBrowsingBundleIds: Set<String> = [
         "org.mozilla.firefox",
     ]
+
+    package static let privacySensitiveBrowserBundleIds =
+        safariPrivateBrowsingBundleIds
+        .union(chromiumPrivateBrowsingBundleIds)
+        .union(edgePrivateBrowsingBundleIds)
+        .union(firefoxPrivateBrowsingBundleIds)
+
+    package static func requiresAccessibilityMetadata(bundleId: String?) -> Bool {
+        guard let bundleId else { return false }
+        return privacySensitiveBrowserBundleIds.contains(bundleId)
+    }
 }

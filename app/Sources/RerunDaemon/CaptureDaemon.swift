@@ -15,7 +15,7 @@ final class CaptureDaemon {
     // MARK: - Timers & State
     private var captureTimer: Timer?
     private var statsTimer: Timer?
-    private var isPaused = false
+    private var pauseState = CapturePauseState()
     private var isCaptureInProgress = false
 
     // MARK: - Stats
@@ -60,19 +60,19 @@ final class CaptureDaemon {
     }
 
     func pause() {
-        isPaused = true
+        pauseState.pauseManual()
         logger.info("Capture paused (manual)")
     }
 
     func resume() {
-        isPaused = false
+        pauseState.resumeManual()
         logger.info("Capture resumed (manual)")
     }
 
     // MARK: - Core Capture
 
     private func performCapture(trigger: String) {
-        guard !isCaptureInProgress, !isPaused else { return }
+        guard !isCaptureInProgress, !pauseState.isPaused else { return }
 
         if isIdle {
             logger.debug("Idle, skipping capture")
@@ -88,6 +88,12 @@ final class CaptureDaemon {
             let frontmostBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             if await exclusionManager.shouldExcludeApp(bundleId: frontmostBundleId) {
                 logger.debug("Excluded app: \(frontmostBundleId ?? "nil")")
+                return
+            }
+
+            if !AccessibilityExtractor.isAccessibilityGranted,
+               DefaultExclusions.requiresAccessibilityMetadata(bundleId: frontmostBundleId) {
+                logger.warning("Skipping browser capture without Accessibility metadata: \(frontmostBundleId ?? "nil")")
                 return
             }
 
@@ -219,12 +225,16 @@ final class CaptureDaemon {
     }
 
     @objc private func handleSleep() {
-        isPaused = true
+        pauseState.pauseSystem()
         logger.info("Paused: sleep/session inactive")
     }
 
     @objc private func handleWake() {
-        isPaused = false
-        logger.info("Resumed: wake/session active")
+        pauseState.resumeSystem()
+        if pauseState.isPaused {
+            logger.info("Wake/session active; manual pause still enabled")
+        } else {
+            logger.info("Resumed: wake/session active")
+        }
     }
 }

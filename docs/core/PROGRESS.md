@@ -1,6 +1,6 @@
 # Core MVP Progress
 
-## Status: Phase 7 - Completed
+## Status: Phase 8 - Completed
 
 ## Quick Reference
 - Research: `docs/core/RESEARCH.md`
@@ -236,13 +236,32 @@
 ---
 
 ### Phase 8: CLI Scaffold + `rerun status`
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- [x] Set up RerunCLI with AsyncParsableCommand root command in separate RerunCommand.swift
+- [x] Created subcommand structure: RerunCommand (root) → StatusCommand, with Commands/ and Output/ subdirectories
+- [x] Implemented `rerun status` reading real data from database: total captures, date range, storage size, daemon PID
+- [x] Implemented `--json` flag on status: outputs structured JSON via RerunStats Codable struct
+- [x] Implemented TTY detection: auto-switch to JSON when piped via `isatty(STDOUT_FILENO)`
+- [x] Implemented `--no-color` flag and `NO_COLOR` env var support (forward-compatible)
+- [x] Implemented `--help` with examples on status command (discussion field)
+- [x] Set semantic exit codes: 0 success, 1 error, 2 bad args (ArgumentParser), 3 daemon not running
+- [x] Created `OutputFormatter` utility (handles text/json/TTY switching)
+- [x] Created `StatsProvider` in RerunCore for reusable stats gathering
+- [x] Created `DaemonDetector` using pgrep for process detection
+- [x] Added `oldestCaptureTimestamp()` and `newestCaptureTimestamp()` to DatabaseManager
+- [x] Deleted old placeholder main.swift, replaced with proper file structure
+- [x] All 44 existing tests passing, zero build warnings
 
 #### Decisions Made
-- (none yet)
+- **AsyncParsableCommand over ParsableCommand:** DatabaseManager is an actor, all its methods are async. CLI commands must be async to call them.
+- **pgrep for daemon detection:** `NSRunningApplication` only finds GUI apps. `pgrep -x rerun-daemon` detects headless daemon processes. PID file deferred to Phase 14 (LaunchAgent).
+- **StatsProvider in RerunCore:** Reusable by daemon stats logging, not just CLI.
+- **OutputFormatter in RerunCLI:** CLI-specific concern, not needed by daemon or core.
+- **Nil optionals omitted from JSON:** Swift's synthesized Codable uses `encodeIfPresent`, so `daemonPID`, `oldestCapture`, `newestCapture` are omitted when nil. Cleaner API.
+- **DB auto-creates on first status:** DatabaseManager init creates the file. Running `rerun status` on a fresh install creates an empty DB — clean initial state.
+- **No ANSI colors yet:** Nothing to colorize in status output. Flag exists for forward-compatibility. Color comes with search result highlighting in Phase 9.
 
 #### Blockers
 - (none)
@@ -396,10 +415,26 @@
 - Domain exclusion with wildcard matching
 - Wired into CaptureDaemon pipeline with excluded count in stats
 - 14 new tests, 44 total passing, zero warnings
+- Completed Phase 8: CLI scaffold + rerun status
+- Replaced placeholder main.swift with proper file structure (RerunCommand, Commands/, Output/)
+- AsyncParsableCommand for async actor-based DB access
+- StatsProvider + DaemonDetector in RerunCore/Stats/ for reusable stats
+- OutputFormatter with TTY detection, --json flag, --no-color + NO_COLOR support
+- StatusCommand reads real data: capture count, date range, storage size, daemon PID
+- Semantic exit codes: 0 (running), 3 (daemon not running)
+- Help text with examples on every command
+- 44 tests passing, zero warnings
 
 ---
 
 ## Files Changed
+- `app/Sources/RerunCore/Stats/DaemonDetector.swift` (new — process detection via pgrep)
+- `app/Sources/RerunCore/Stats/StatsProvider.swift` (new — RerunStats struct + gatherStats)
+- `app/Sources/RerunCore/Database/DatabaseManager.swift` (updated — added oldest/newest timestamp methods)
+- `app/Sources/RerunCLI/RerunCommand.swift` (new — AsyncParsableCommand root, replaces main.swift)
+- `app/Sources/RerunCLI/Commands/StatusCommand.swift` (new — real status with DB queries + daemon detection)
+- `app/Sources/RerunCLI/Output/OutputFormatter.swift` (new — TTY detection, JSON/text switching)
+- `app/Sources/RerunCLI/main.swift` (deleted — replaced by RerunCommand.swift)
 - `app/Sources/RerunCore/Models/Capture.swift` (new)
 - `app/Sources/RerunCore/Models/Summary.swift` (new)
 - `app/Sources/RerunCore/Models/Exclusion.swift` (new)
