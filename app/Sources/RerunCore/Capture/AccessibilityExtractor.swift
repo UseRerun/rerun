@@ -13,7 +13,7 @@ public final class AccessibilityExtractor: @unchecked Sendable {
     private let maxChildrenPerNode: Int
     private let timeoutSeconds: TimeInterval
 
-    public init(maxDepth: Int = 4, maxChildrenPerNode: Int = 30, timeoutSeconds: TimeInterval = 0.2) {
+    public init(maxDepth: Int = 8, maxChildrenPerNode: Int = 30, timeoutSeconds: TimeInterval = 0.2) {
         self.maxDepth = maxDepth
         self.maxChildrenPerNode = maxChildrenPerNode
         self.timeoutSeconds = timeoutSeconds
