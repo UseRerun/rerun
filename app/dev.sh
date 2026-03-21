@@ -6,13 +6,13 @@ cd "$(dirname "$0")"
 PROFILE="${RERUN_PROFILE:-dev}"
 export RERUN_PROFILE="$PROFILE"
 
-# On start: build debug RerunDev.app so --target local finds a real app bundle.
-# This gives the dev daemon a proper bundle ID (com.rerun.dev) for TCC permissions,
-# NSApplication, status bar, hotkeys, and all other app-bundle-only behavior.
+# On start: build debug RerunDev.app into /Applications so TCC permissions persist
+# across git worktrees. This gives the dev daemon a proper bundle ID (com.rerun.dev)
+# for TCC permissions, NSApplication, status bar, hotkeys, and all app-bundle behavior.
 if [[ ${1-} == "start" ]]; then
     swift build
 
-    APP_DIR="build/RerunDev.app"
+    APP_DIR="/Applications/RerunDev.app"
     CONTENTS="${APP_DIR}/Contents"
     DEST="${CONTENTS}/MacOS/RerunDev"
     SRC=".build/debug/rerun-daemon"
@@ -79,7 +79,7 @@ if [[ ${1-} == "start" ]]; then
         fi
     done
     if [[ $has_target -eq 0 ]]; then
-        args+=("--target" "local")
+        args+=("--target" "installed")
     fi
 fi
 
