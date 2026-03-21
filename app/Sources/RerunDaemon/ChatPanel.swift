@@ -4,12 +4,18 @@ import os
 
 private let logger = Logger(subsystem: "com.rerun", category: "ChatPanel")
 
+extension Notification.Name {
+    static let chatPanelDidShow = Notification.Name("chatPanelDidShow")
+}
+
 @MainActor
 final class ChatPanel {
     private let panel: NSPanel
+    private let viewModel: ChatViewModel
 
     init() {
         logger.notice("Creating ChatPanel")
+        viewModel = ChatViewModel()
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
@@ -27,9 +33,8 @@ final class ChatPanel {
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 400, height: 300)
 
-        // Placeholder SwiftUI content — Phase 2 replaces this
-        let placeholder = NSHostingView(rootView: ChatPlaceholderView())
-        panel.contentView = placeholder
+        let chatView = ChatView(viewModel: viewModel)
+        panel.contentView = NSHostingView(rootView: chatView)
 
         // Escape to dismiss
         panel.standardWindowButton(.closeButton)?.isHidden = true
@@ -49,10 +54,12 @@ final class ChatPanel {
         positionOnActiveScreen()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        NotificationCenter.default.post(name: .chatPanelDidShow, object: nil)
     }
 
     func hide() {
         logger.notice("hide()")
+        viewModel.newConversation()
         panel.orderOut(nil)
     }
 
@@ -65,22 +72,5 @@ final class ChatPanel {
         let x = screenFrame.midX - panelSize.width / 2
         let y = screenFrame.maxY - (screenFrame.height * 0.2) - panelSize.height / 2
         panel.setFrameOrigin(NSPoint(x: x, y: y))
-    }
-}
-
-// Minimal placeholder view — replaced by ChatView in Phase 2
-private struct ChatPlaceholderView: View {
-    var body: some View {
-        VStack {
-            Spacer()
-            Text("Rerun Chat")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-            Text("Ask about anything you've seen on your screen")
-                .font(.body)
-                .foregroundStyle(.tertiary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
