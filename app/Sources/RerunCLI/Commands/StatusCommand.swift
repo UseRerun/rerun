@@ -21,10 +21,11 @@ struct StatusCommand: AsyncParsableCommand {
     var noColor = false
 
     func run() async throws {
+        let profile = RerunProfile.current()
         let formatter = OutputFormatter(json: json, noColor: noColor)
 
-        let db = try DatabaseManager(path: DatabaseManager.defaultPath())
-        let stats = try await StatsProvider.gatherStats(db: db)
+        let db = try DatabaseManager(path: DatabaseManager.defaultPath(profile: profile))
+        let stats = try await StatsProvider.gatherStats(db: db, profile: profile)
 
         if formatter.useJSON {
             try formatter.printJSON(stats)
@@ -40,6 +41,7 @@ struct StatusCommand: AsyncParsableCommand {
     private func printHuman(_ stats: RerunStats) {
         var lines: [String] = []
         lines.append("Rerun v\(stats.version)")
+        lines.append("Profile: \(stats.profile)")
 
         if stats.daemonRunning, let pid = stats.daemonPID {
             lines.append("Status: running (PID \(pid))")

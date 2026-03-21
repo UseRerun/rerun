@@ -12,6 +12,14 @@ struct PrivacyHelpersTests {
         #expect(DefaultExclusions.requiresAccessibilityMetadata(bundleId: nil) == false)
     }
 
+    @Test func rerunSelfExclusionsCoverBundledAppAndDaemon() {
+        let bundleIds = Set(DefaultExclusions.apps.map(\.bundleId))
+
+        #expect(bundleIds.contains("com.rerun.daemon"))
+        #expect(bundleIds.contains("com.rerun.app"))
+        #expect(bundleIds.contains("com.rerun.dev"))
+    }
+
     @Test func manualPauseSurvivesSystemWake() {
         var state = CapturePauseState()
 

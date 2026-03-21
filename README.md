@@ -53,18 +53,117 @@ rerun/
 ## Development
 
 ```bash
-# Build the app
+# Build + test
 cd app && swift build
+swift test
 
 # Run the CLI
 swift run rerun --help
 
-# Run the daemon
+# Run the default/profile daemon directly
 swift run rerun-daemon
 
 # Run the marketing site
 cd website && npm install && npm run dev
 ```
+
+## Dev vs Prod
+
+Rerun now supports parallel app identities plus parallel runtime profiles.
+
+| App | Bundle ID | Default profile | Markdown home | State path |
+| --- | --- | --- | --- | --- |
+| `Rerun.app` | `com.rerun.app` | `default` | `~/rerun` | `~/Library/Application Support/Rerun` |
+| `RerunDev.app` | `com.rerun.dev` | `dev` | `~/rerun-dev` | `~/Library/Application Support/Rerun-dev` |
+
+Why this exists:
+
+- `Rerun.app` and `RerunDev.app` can run side-by-side.
+- Dev no longer shares DB, pid file, pause file, or captures with prod.
+- macOS permissions are separate per bundle ID, so `RerunDev.app` gets its own Accessibility + Screen Recording grants.
+
+CLI-only custom profiles also work:
+
+```bash
+cd app
+RERUN_PROFILE=qa swift run rerun config --json
+```
+
+That creates isolated state like `~/rerun-qa` and `~/Library/Application Support/Rerun-qa`.
+
+## Local Dev Workflow
+
+Use the dev wrapper. It defaults to the `dev` profile and local launch target.
+
+```bash
+cd app
+./dev.sh start
+./dev.sh status --json
+./dev.sh stop
+```
+
+Smoke test:
+
+```bash
+cd app
+./dev-smoke.sh
+```
+
+That validates:
+
+- dev profile selected
+- daemon starts
+- status sees the correct pid
+- daemon stops cleanly
+
+## Building App Bundles
+
+Build both app variants:
+
+```bash
+cd app
+./bundle.sh all
+```
+
+Or build one variant:
+
+```bash
+./bundle.sh prod
+./bundle.sh dev
+```
+
+Outputs:
+
+- `app/build/Rerun.app`
+- `app/build/RerunDev.app`
+
+Install both:
+
+```bash
+cp -R app/build/Rerun.app /Applications/
+cp -R app/build/RerunDev.app /Applications/
+```
+
+`RerunDev.app` defaults to the `dev` profile automatically when launched from Finder or `open`.
+
+## Launch Target Selection
+
+`rerun start` supports explicit launch targeting:
+
+```bash
+cd app
+swift run rerun start --target auto
+swift run rerun start --target local
+swift run rerun start --target installed
+```
+
+Resolution order for `--target auto`:
+
+1. Local app variant for the current profile (`Rerun.app` or `RerunDev.app`)
+2. Local `rerun-daemon`
+3. Installed app in `/Applications`
+
+This means local development no longer accidentally boots the installed production app first.
 
 ## License
 

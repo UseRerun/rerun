@@ -3,6 +3,150 @@ import AppKit
 import Foundation
 import RerunCore
 
+enum DaemonLaunchTarget: Equatable {
+    case app(URL)
+    case binary(URL)
+
+    static func resolve(
+        executableURL: URL,
+        profile: String,
+        preference: DaemonLaunchPreference = .auto,
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> DaemonLaunchTarget? {
+        let localApps = appBundleCandidates(executableURL: executableURL, profile: profile)
+        let localBinary = executableURL.deletingLastPathComponent().appendingPathComponent("rerun-daemon")
+        let installedAppURL = installedAppURL(profile: profile)
+
+        func firstExistingApp(in urls: [URL]) -> DaemonLaunchTarget? {
+            for appURL in urls {
+                if let executablePath = appExecutablePath(for: appURL, profile: profile),
+                   fileExists(executablePath) {
+                    return .app(appURL)
+                }
+            }
+            return nil
+        }
+
+        switch preference {
+        case .local:
+            if let target = firstExistingApp(in: localApps) {
+                return target
+            }
+            return fileExists(localBinary.path) ? .binary(localBinary) : nil
+        case .installed:
+            guard let installedAppURL,
+                  let executablePath = appExecutablePath(for: installedAppURL, profile: profile),
+                  fileExists(executablePath) else {
+                return nil
+            }
+            return .app(installedAppURL)
+        case .auto:
+            if let target = firstExistingApp(in: localApps) {
+                return target
+            }
+            if fileExists(localBinary.path) {
+                return .binary(localBinary)
+            }
+            guard let installedAppURL,
+                  let executablePath = appExecutablePath(for: installedAppURL, profile: profile),
+                  fileExists(executablePath) else {
+                return nil
+            }
+            return .app(installedAppURL)
+        }
+    }
+
+    private static func installedAppURL(profile: String) -> URL? {
+        guard let variant = RerunAppVariant.variant(forProfile: profile) else { return nil }
+        return URL(fileURLWithPath: "/Applications/\(variant.appName).app")
+    }
+
+    private static func appExecutablePath(for appURL: URL, profile: String) -> String? {
+        guard let variant = RerunAppVariant.variant(forProfile: profile) else { return nil }
+        return appURL.appendingPathComponent("Contents/MacOS/\(variant.executableName)").path
+    }
+}
+
+enum DaemonLaunchPreference: String, ExpressibleByArgument {
+    case auto
+    case local
+    case installed
+}
+
+enum DaemonLaunchContext {
+    static func processEnvironment(profile: String) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        environment["RERUN_PROFILE"] = profile
+        return environment
+    }
+
+    static func launchArguments(profile: String) -> [String] {
+        RerunProfile.launchArguments(profile: profile)
+    }
+}
+
+extension DaemonLaunchTarget {
+    static func appBundleCandidates(executableURL: URL, profile: String) -> [URL] {
+        var urls: [URL] = []
+        var seenPaths = Set<String>()
+        guard let variant = RerunAppVariant.variant(forProfile: profile) else {
+            return []
+        }
+
+        func append(_ url: URL) {
+            let path = url.standardizedFileURL.path
+            if seenPaths.insert(path).inserted {
+                urls.append(url)
+            }
+        }
+
+        var current = executableURL.deletingLastPathComponent()
+        append(current.appendingPathComponent("\(variant.appName).app", isDirectory: true))
+
+        for _ in 0..<6 {
+            append(current.appendingPathComponent("\(variant.appName).app", isDirectory: true))
+            append(
+                current
+                    .appendingPathComponent("build", isDirectory: true)
+                    .appendingPathComponent("\(variant.appName).app", isDirectory: true)
+            )
+
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path {
+                break
+            }
+            current = parent
+        }
+
+        return urls
+    }
+}
+
+enum DaemonStartError: Error, Equatable {
+    case appNeverHealthy
+    case daemonNeverHealthy
+}
+
+enum DaemonStartSupport {
+    static func waitForHealthyStartup(
+        target: DaemonLaunchTarget,
+        waitUntilRunning: () async -> DaemonDetector.DaemonStatus? = {
+            await DaemonStartupWaiter.waitUntilRunning()
+        }
+    ) async throws -> DaemonDetector.DaemonStatus {
+        guard let status = await waitUntilRunning() else {
+            switch target {
+            case .app:
+                throw DaemonStartError.appNeverHealthy
+            case .binary:
+                throw DaemonStartError.daemonNeverHealthy
+            }
+        }
+
+        return status
+    }
+}
+
 struct StartCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "start",
@@ -12,8 +156,13 @@ struct StartCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Output as JSON.")
     var json = false
 
+    @Option(name: .long, help: "Launch target: auto, local, or installed.")
+    var target: DaemonLaunchPreference = .auto
+
     func run() async throws {
-        if LaunchAgentManager.isInstalled() {
+        let profile = RerunProfile.current()
+
+        if RerunProfile.isDefault(profile), LaunchAgentManager.isInstalled() {
             do {
                 try LaunchAgentManager.uninstall()
             } catch {
@@ -22,7 +171,7 @@ struct StartCommand: AsyncParsableCommand {
             }
         }
 
-        let status = DaemonDetector.detect()
+        let status = DaemonDetector.detect(profile: profile)
         let formatter = OutputFormatter(json: json)
 
         if status.running {
@@ -39,25 +188,18 @@ struct StartCommand: AsyncParsableCommand {
             throw ExitCode(1)
         }
 
-        // Try to find Rerun.app (production mode)
-        let appLocations = [
-            URL(fileURLWithPath: "/Applications/Rerun.app"),
-            execURL.deletingLastPathComponent().appendingPathComponent("Rerun.app"),
-        ]
-
-        var appURL: URL?
-        for location in appLocations {
-            if FileManager.default.fileExists(atPath: location.appendingPathComponent("Contents/MacOS/Rerun").path) {
-                appURL = location
-                break
-            }
+        guard let launchTarget = DaemonLaunchTarget.resolve(executableURL: execURL, profile: profile, preference: target) else {
+            print("No matching Rerun launch target found for --target \(target.rawValue).")
+            throw ExitCode(1)
         }
 
-        if let appURL {
+        switch launchTarget {
+        case .app(let appURL):
             // Launch as app bundle for proper TCC identity
             let config = NSWorkspace.OpenConfiguration()
             config.activates = false
             config.createsNewApplicationInstance = true
+            config.arguments = DaemonLaunchContext.launchArguments(profile: profile)
 
             do {
                 try await NSWorkspace.shared.openApplication(at: appURL, configuration: config)
@@ -66,7 +208,7 @@ struct StartCommand: AsyncParsableCommand {
                 throw ExitCode(1)
             }
 
-            guard let newStatus = await DaemonStartupWaiter.waitUntilRunning() else {
+            guard let newStatus = try? await DaemonStartSupport.waitForHealthyStartup(target: launchTarget) else {
                 print("Rerun.app launched but the daemon never became healthy.")
                 throw ExitCode(1)
             }
@@ -76,17 +218,12 @@ struct StartCommand: AsyncParsableCommand {
             } else {
                 print("Daemon started (PID \(newStatus.pid ?? 0))")
             }
-        } else {
+        case .binary(let daemonURL):
             // Development: fall back to bare daemon binary
-            let daemonURL = execURL.deletingLastPathComponent().appendingPathComponent("rerun-daemon")
-
-            guard FileManager.default.fileExists(atPath: daemonURL.path) else {
-                print("Neither Rerun.app nor rerun-daemon found.")
-                throw ExitCode(1)
-            }
-
             let process = Process()
             process.executableURL = daemonURL
+            process.arguments = DaemonLaunchContext.launchArguments(profile: profile)
+            process.environment = DaemonLaunchContext.processEnvironment(profile: profile)
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             process.qualityOfService = .background
@@ -98,10 +235,16 @@ struct StartCommand: AsyncParsableCommand {
                 throw ExitCode(1)
             }
 
+            guard let newStatus = try? await DaemonStartSupport.waitForHealthyStartup(target: launchTarget) else {
+                print("rerun-daemon launched but the daemon never became healthy.")
+                throw ExitCode(1)
+            }
+
+            let pid = newStatus.pid ?? Int(process.processIdentifier)
             if formatter.useJSON {
-                try formatter.printJSON(["status": "started", "pid": "\(process.processIdentifier)"])
+                try formatter.printJSON(["status": "started", "pid": "\(pid)"])
             } else {
-                print("Daemon started (PID \(process.processIdentifier))")
+                print("Daemon started (PID \(pid))")
             }
         }
     }
@@ -117,8 +260,9 @@ struct StopCommand: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
+        let profile = RerunProfile.current()
         let formatter = OutputFormatter(json: json)
-        let hadLaunchAgent = LaunchAgentManager.isInstalled()
+        let hadLaunchAgent = RerunProfile.isDefault(profile) && LaunchAgentManager.isInstalled()
 
         if hadLaunchAgent {
             do {
@@ -129,7 +273,7 @@ struct StopCommand: AsyncParsableCommand {
             }
         }
 
-        let status = DaemonDetector.detect()
+        let status = DaemonDetector.detect(profile: profile)
 
         guard status.running, let pid = status.pid else {
             if hadLaunchAgent {

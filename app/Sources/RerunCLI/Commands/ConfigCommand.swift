@@ -23,16 +23,19 @@ struct ConfigCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Disable colored output.")
     var noColor = false
 
-    private static let knownKeys = ["rerun_home", "database_path", "capture_interval", "exclusion_count", "version"]
+    private static let knownKeys = ["profile", "rerun_home", "state_path", "database_path", "capture_interval", "exclusion_count", "version"]
 
     func run() async throws {
+        let profile = RerunProfile.current()
         let formatter = OutputFormatter(json: json, noColor: noColor)
-        let db = try DatabaseManager(path: DatabaseManager.defaultPath())
+        let db = try DatabaseManager(path: DatabaseManager.defaultPath(profile: profile))
         let exclusionCount = try await db.fetchExclusions().count
 
         let config: [(String, String)] = [
-            ("rerun_home", RerunHome.baseURL().path),
-            ("database_path", try DatabaseManager.defaultPath()),
+            ("profile", profile),
+            ("rerun_home", RerunHome.baseURL(profile: profile).path),
+            ("state_path", RerunHome.appSupportURL(profile: profile).path),
+            ("database_path", try DatabaseManager.defaultPath(profile: profile)),
             ("capture_interval", "10s"),
             ("exclusion_count", "\(exclusionCount)"),
             ("version", Rerun.version),

@@ -13,6 +13,8 @@ public enum DefaultExclusions {
         ("com.apple.systempreferences", "System Settings"),
         ("com.apple.Passwords", "Passwords"),
         ("com.rerun.daemon", "Rerun"),
+        ("com.rerun.app", "Rerun"),
+        ("com.rerun.dev", "RerunDev"),
     ]
 
     static let safariPrivateBrowsingBundleIds: Set<String> = [
