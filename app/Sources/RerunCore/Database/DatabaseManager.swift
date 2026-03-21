@@ -303,6 +303,21 @@ public actor DatabaseManager {
         }
     }
 
+    public func topURLs(since: String? = nil, limit: Int = 10) throws -> [(url: String, count: Int)] {
+        try dbPool.read { db in
+            var sql = "SELECT url, COUNT(*) as cnt FROM capture WHERE url IS NOT NULL"
+            var arguments: [any DatabaseValueConvertible] = []
+            if let since {
+                sql += " AND julianday(timestamp) >= julianday(?)"
+                arguments.append(since)
+            }
+            sql += " GROUP BY url ORDER BY cnt DESC LIMIT ?"
+            arguments.append(limit)
+            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            return rows.map { ($0["url"] as String, $0["cnt"] as Int) }
+        }
+    }
+
     // MARK: - Ranked Search (for hybrid scoring)
 
     public func searchCapturesWithRank(

@@ -15,6 +15,8 @@ final class CaptureDaemon {
     // MARK: - Timers & State
     private var captureTimer: Timer?
     private var statsTimer: Timer?
+    private var todayMdTimer: Timer?
+    private var indexMdTimer: Timer?
     private var pauseState = CapturePauseState()
     private var isCaptureInProgress = false
 
@@ -28,6 +30,8 @@ final class CaptureDaemon {
     private let captureInterval: TimeInterval = 10.0
     private let idleThreshold: TimeInterval = 30.0
     private let statsInterval: TimeInterval = 300.0
+    private let todayMdInterval: TimeInterval = 1800.0   // 30 min
+    private let indexMdInterval: TimeInterval = 3600.0    // 1 hour
 
     init(orchestrator: CaptureOrchestrator, db: DatabaseManager, exclusionManager: ExclusionManager) {
         self.orchestrator = orchestrator
@@ -46,6 +50,8 @@ final class CaptureDaemon {
         observeNotifications()
         startCaptureTimer()
         startStatsTimer()
+        generateAgentFiles()
+        startAgentFileTimers()
 
         logger.info("Daemon started — capturing every \(self.captureInterval)s")
     }
@@ -55,6 +61,10 @@ final class CaptureDaemon {
         captureTimer = nil
         statsTimer?.invalidate()
         statsTimer = nil
+        todayMdTimer?.invalidate()
+        todayMdTimer = nil
+        indexMdTimer?.invalidate()
+        indexMdTimer = nil
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         logger.info("Daemon stopped")
     }
@@ -210,6 +220,44 @@ final class CaptureDaemon {
         Task {
             let excluded = await exclusionManager.excludedCount
             logger.info("Stats: \(self.totalCaptures) captures (\(self.appSwitchCaptures) app_switch, \(self.timerCaptures) timer), \(self.deduplicatedCount) deduped, \(excluded) excluded")
+        }
+    }
+
+    // MARK: - Agent Files
+
+    private func startAgentFileTimers() {
+        todayMdTimer = Timer.scheduledTimer(withTimeInterval: todayMdInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.generateTodayMd()
+            }
+        }
+        indexMdTimer = Timer.scheduledTimer(withTimeInterval: indexMdInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.generateIndexMd()
+            }
+        }
+    }
+
+    private func generateAgentFiles() {
+        let database = db
+        Task.detached {
+            let gen = AgentFileGenerator()
+            try? await gen.generateTodayMd(db: database)
+            try? await gen.generateIndexMd(db: database)
+        }
+    }
+
+    private func generateTodayMd() {
+        let database = db
+        Task.detached {
+            try? await AgentFileGenerator().generateTodayMd(db: database)
+        }
+    }
+
+    private func generateIndexMd() {
+        let database = db
+        Task.detached {
+            try? await AgentFileGenerator().generateIndexMd(db: database)
         }
     }
 
