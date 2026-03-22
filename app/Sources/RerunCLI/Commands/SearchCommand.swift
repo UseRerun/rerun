@@ -51,11 +51,6 @@ struct SearchCommand: AsyncParsableCommand {
             throw ExitCode(2)
         }
 
-        // Parse NL query for implicit filters
-        let parser = QueryParser()
-        let parsed = await parser.parseBestEffort(query)
-
-        // Explicit CLI flags override parsed values
         var effectiveSince: String? = nil
         if let since {
             guard let parsedSince = SearchTimeParser.parseSince(since) else {
@@ -63,28 +58,20 @@ struct SearchCommand: AsyncParsableCommand {
                 throw ExitCode(2)
             }
             effectiveSince = parsedSince
-        } else {
-            effectiveSince = parsed.since
         }
 
-        let effectiveApp = app ?? parsed.appFilter
-        let effectiveQuery = parsed.effectiveQuery
-
         let db = try DatabaseManager(path: DatabaseManager.defaultPath())
-        let hybridSearch = HybridSearch()
-        let embedder = EmbeddingGenerator()
+        let service = SearchService(db: db)
 
-        let scored = try await hybridSearch.search(
-            query: effectiveQuery,
-            mode: searchMode,
-            app: effectiveApp,
+        let response = try await service.search(SearchRequest(
+            query: query,
+            app: app,
             since: effectiveSince,
             limit: limit,
-            db: db,
-            embedder: embedder
-        )
+            mode: searchMode
+        ))
 
-        guard !scored.isEmpty else {
+        guard !response.hits.isEmpty else {
             if formatter.useJSON {
                 try formatter.printJSON([SearchResult]())
             } else {
@@ -93,11 +80,8 @@ struct SearchCommand: AsyncParsableCommand {
             throw ExitCode(4)
         }
 
-        let searchResults = scored.map { result in
-            SearchResult(
-                capture: result.capture,
-                snippet: SearchResult.makeSnippet(from: result.capture.textContent, query: effectiveQuery)
-            )
+        let searchResults = response.hits.map {
+            SearchResult(capture: $0.capture, snippet: $0.snippet)
         }
 
         if formatter.useJSON {

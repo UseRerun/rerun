@@ -6,9 +6,8 @@ cd "$(dirname "$0")"
 PROFILE="${RERUN_PROFILE:-dev}"
 export RERUN_PROFILE="$PROFILE"
 
-# On start: build debug RerunDev.app into /Applications so TCC permissions persist
-# across git worktrees. This gives the dev daemon a proper bundle ID (com.rerun.dev)
-# for TCC permissions, NSApplication, status bar, hotkeys, and all app-bundle behavior.
+# On start: build debug RerunDev.app into /Applications so the dev app keeps a
+# stable bundle path and TCC permissions across git worktrees.
 if [[ ${1-} == "start" ]]; then
     swift build
 
@@ -31,6 +30,27 @@ if [[ ${1-} == "start" ]]; then
     if [[ "$SRC_HASH" != "$OLD_HASH" ]]; then
         cp "$SRC" "$DEST"
         echo "$SRC_HASH" > "$HASH_FILE"
+
+        # Compile MLX Metal shaders into metallib if needed
+        MLX_METALLIB="${CONTENTS}/MacOS/mlx.metallib"
+        CLI_METALLIB=".build/debug/mlx.metallib"
+        MLX_METAL_DIR=".build/checkouts/mlx-swift/Source/Cmlx/mlx-generated/metal"
+        if [[ -d "$MLX_METAL_DIR" ]] && ! [[ -f "$MLX_METALLIB" ]]; then
+            echo "Compiling MLX Metal shaders..."
+            TMPDIR_AIR=$(mktemp -d)
+            find "$MLX_METAL_DIR" -name "*.metal" | while read f; do
+                AIR="${TMPDIR_AIR}/$(basename "${f%.metal}.air")"
+                xcrun metal -c "$f" -I "$MLX_METAL_DIR" -o "$AIR" 2>/dev/null
+            done
+            find "$TMPDIR_AIR" -name "*.air" -print0 | xargs -0 xcrun metallib -o "$MLX_METALLIB" 2>/dev/null
+            rm -rf "$TMPDIR_AIR"
+            echo "MLX metallib compiled"
+        fi
+        # Also copy metallib to .build/debug/ so CLI binary can find it
+        if [[ -f "$MLX_METALLIB" ]] && ! [[ -f "$CLI_METALLIB" ]]; then
+            cp "$MLX_METALLIB" "$CLI_METALLIB"
+        fi
+
         CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Sabotage Media, LLC (W33JZPPPFN)}"
         codesign --force --sign "${CODESIGN_IDENTITY}" "${APP_DIR}" 2>/dev/null || codesign --force --sign - "${APP_DIR}" 2>/dev/null || true
         echo "Updated RerunDev.app binary"

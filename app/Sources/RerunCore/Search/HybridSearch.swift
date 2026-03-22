@@ -45,7 +45,7 @@ public struct HybridSearch: Sendable {
     private func keywordOnly(
         query: String, app: String?, since: String?, limit: Int, db: DatabaseManager
     ) async throws -> [ScoredResult] {
-        let ranked = try await db.searchCapturesWithRank(query: query, app: app, since: since, limit: limit)
+        let ranked = try await keywordMatches(query: query, app: app, since: since, limit: limit, db: db)
         return ranked.map { item in
             ScoredResult(
                 capture: item.capture,
@@ -77,7 +77,7 @@ public struct HybridSearch: Sendable {
         let queryEmbedding = embedder.embed(query)
 
         // Keyword results
-        let keywordResults = try await db.searchCapturesWithRank(query: query, app: app, since: since, limit: limit)
+        let keywordResults = try await keywordMatches(query: query, app: app, since: since, limit: limit, db: db)
 
         // If no embeddings available, keyword-only
         guard let embedding = queryEmbedding else {
@@ -93,6 +93,145 @@ public struct HybridSearch: Sendable {
         return merge(keyword: keywordResults, vector: vectorResults, limit: limit)
     }
 
+    private func keywordMatches(
+        query: String,
+        app: String?,
+        since: String?,
+        limit: Int,
+        db: DatabaseManager
+    ) async throws -> [(capture: Capture, rank: Float)] {
+        let normalizedQuery = normalizedKeywordQuery(query)
+        for attempt in 0..<2 {
+            let ranked = try await db.searchCapturesWithRank(query: query, app: app, since: since, limit: limit)
+            if !ranked.isEmpty {
+                return ranked
+            }
+
+            if !normalizedQuery.isEmpty, normalizedQuery != query {
+                let normalizedRanked = try await db.searchCapturesWithRank(
+                    query: normalizedQuery,
+                    app: app,
+                    since: since,
+                    limit: limit
+                )
+                if !normalizedRanked.isEmpty {
+                    return normalizedRanked
+                }
+            }
+
+            let fallback = try await fallbackKeywordMatches(
+                query: normalizedQuery.isEmpty ? query : normalizedQuery,
+                app: app,
+                since: since,
+                limit: limit,
+                db: db
+            )
+            if !fallback.isEmpty {
+                return fallback
+            }
+
+            let substringFallback = try await db.substringSearchCaptures(
+                query: normalizedQuery.isEmpty ? query : normalizedQuery,
+                app: app,
+                since: since,
+                limit: limit
+            )
+            if !substringFallback.isEmpty || attempt == 1 {
+                return substringFallback.map { (capture: $0, rank: -1) }
+            }
+
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        return []
+    }
+
+    private func normalizedKeywordQuery(_ query: String) -> String {
+        let allowedSymbols = CharacterSet(charactersIn: "+#./-_")
+        let scalars = query.precomposedStringWithCompatibilityMapping.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar)
+                || CharacterSet.whitespacesAndNewlines.contains(scalar)
+                || allowedSymbols.contains(scalar) {
+                return Character(scalar)
+            }
+            return " "
+        }
+
+        return String(scalars)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    private func fallbackKeywordMatches(
+        query: String,
+        app: String?,
+        since: String?,
+        limit: Int,
+        db: DatabaseManager
+    ) async throws -> [(capture: Capture, rank: Float)] {
+        let stopTerms: Set<String> = [
+            "ago", "day", "days", "hour", "hours", "last", "minute", "minutes",
+            "past", "week", "weeks",
+        ]
+        let tokens = normalizedKeywordQuery(query)
+            .split(separator: " ")
+            .map { $0.lowercased() }
+            .filter { !$0.isEmpty && !$0.allSatisfy(\.isNumber) && !stopTerms.contains($0) }
+        guard !tokens.isEmpty else { return [] }
+
+        let candidateLimit: Int
+        if since != nil {
+            candidateLimit = 20_000
+        } else if app != nil {
+            candidateLimit = 2000
+        } else {
+            candidateLimit = 500
+        }
+        let normalizedSince = since.map { SearchTimeParser.parseSince($0) ?? $0 }
+        let candidates = try await db.fetchCaptures(limit: candidateLimit)
+
+        let scored = candidates.compactMap { capture -> (capture: Capture, rank: Float, hits: Int)? in
+            if let app,
+               capture.appName.caseInsensitiveCompare(app) != .orderedSame {
+                return nil
+            }
+            if let normalizedSince,
+               capture.timestamp < normalizedSince {
+                return nil
+            }
+
+            let haystack = [
+                capture.appName,
+                capture.windowTitle ?? "",
+                capture.url ?? "",
+                capture.textContent,
+            ]
+            .joined(separator: "\n")
+            .lowercased()
+
+            let hits = tokens.reduce(into: 0) { total, token in
+                if haystack.contains(token) {
+                    total += 1
+                }
+            }
+            guard hits > 0 else { return nil }
+
+            // More matched tokens should sort ahead of weaker fallbacks.
+            let rank = -Float(hits * 100)
+            return (capture, rank, hits)
+        }
+
+        return scored
+            .sorted {
+                if $0.hits != $1.hits {
+                    return $0.hits > $1.hits
+                }
+                return $0.capture.timestamp > $1.capture.timestamp
+            }
+            .prefix(limit)
+            .map { (capture: $0.capture, rank: $0.rank) }
+    }
+
     // MARK: - Scoring
 
     static func normalizeRank(_ rank: Float) -> Float {
@@ -103,7 +242,7 @@ public struct HybridSearch: Sendable {
         1.0 / (1.0 + distance)
     }
 
-    private func merge(
+    func merge(
         keyword: [(capture: Capture, rank: Float)],
         vector: [(capture: Capture, distance: Float)],
         limit: Int
@@ -147,6 +286,13 @@ public struct HybridSearch: Sendable {
             return ScoredResult(capture: entry.capture, score: score, source: source)
         }
 
-        return Array(scored.sorted { $0.score > $1.score }.prefix(limit))
+        let keywordBacked = scored
+            .filter { $0.source != .semantic }
+            .sorted { $0.score > $1.score }
+        let semanticOnly = scored
+            .filter { $0.source == .semantic }
+            .sorted { $0.score > $1.score }
+
+        return Array((keywordBacked + semanticOnly).prefix(limit))
     }
 }

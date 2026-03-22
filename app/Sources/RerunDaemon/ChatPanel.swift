@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import RerunCore
 import os
 
 private let logger = Logger(subsystem: "com.rerun", category: "ChatPanel")
@@ -13,9 +14,10 @@ final class ChatPanel {
     private let panel: NSPanel
     private let viewModel: ChatViewModel
 
-    init() {
+    init(db: DatabaseManager, modelManager: ModelManager) {
         logger.notice("Creating ChatPanel")
-        viewModel = ChatViewModel()
+        let engine = ChatEngine(db: db, modelManager: modelManager)
+        viewModel = ChatViewModel(chatEngine: engine)
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],

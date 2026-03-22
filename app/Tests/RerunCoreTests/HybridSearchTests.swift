@@ -83,6 +83,31 @@ struct HybridSearchTests {
         #expect(results[0].capture.appName == "Safari")
     }
 
+    @Test func searchCapturesWithRankFiltersSince() async throws {
+        let db = try makeDB()
+        let older = Date(timeIntervalSince1970: 1_700_000_000)
+        let newer = older.addingTimeInterval(3600)
+
+        try await db.insertCapture(makeCapture(
+            id: "old",
+            textContent: "Ashley planning dinner",
+            textHash: "h-old",
+            timestamp: older
+        ))
+        try await db.insertCapture(makeCapture(
+            id: "new",
+            textContent: "Ashley booked the hotel",
+            textHash: "h-new",
+            timestamp: newer
+        ))
+
+        let since = ISO8601DateFormatter().string(from: newer.addingTimeInterval(-60))
+        let results = try await db.searchCapturesWithRank(query: "ashley", since: since)
+
+        #expect(results.count == 1)
+        #expect(results[0].capture.id == "new")
+    }
+
     @Test func findSimilarWithDistanceReturnsDistance() async throws {
         let db = try makeDB()
         let capture = makeCapture(id: "cap1", textContent: "test", textHash: "h1")
@@ -137,6 +162,26 @@ struct HybridSearchTests {
         #expect(results[0].capture.textContent.contains("Stripe"))
     }
 
+    @Test func keywordModeNormalizesInvisibleNoise() async throws {
+        let db = try makeDB()
+        try await db.insertCapture(makeCapture(
+            textContent: "Ashley Pigford dinner plans",
+            textHash: "h1"
+        ))
+
+        let search = HybridSearch()
+        let embedder = EmbeddingGenerator()
+        let results = try await search.search(
+            query: "Ashley\u{200B}",
+            mode: .keyword,
+            db: db,
+            embedder: embedder
+        )
+
+        #expect(results.count == 1)
+        #expect(results[0].capture.textContent.contains("Ashley"))
+    }
+
     // MARK: - Hybrid Dedup
 
     @Test func hybridDeduplicatesResults() async throws {
@@ -157,6 +202,24 @@ struct HybridSearchTests {
 
         // Both return the same capture — hybrid search should dedup
         // We test this at the DB level since EmbeddingGenerator may not be available
+    }
+
+    @Test func mergeKeepsKeywordHitsAheadOfSemanticOnlyResults() {
+        let search = HybridSearch()
+        let keywordCapture = makeCapture(id: "keyword", textContent: "Ashley Pigford dinner plans")
+        let semanticCapture = makeCapture(id: "semantic", textContent: "Conductor workspace notes")
+
+        let results = search.merge(
+            keyword: [(capture: keywordCapture, rank: -20)],
+            vector: [(capture: semanticCapture, distance: 0.05)],
+            limit: 2
+        )
+
+        #expect(results.count == 2)
+        #expect(results[0].capture.id == "keyword")
+        #expect(results[0].source == .keyword)
+        #expect(results[1].capture.id == "semantic")
+        #expect(results[1].source == .semantic)
     }
 }
 
@@ -303,5 +366,64 @@ struct QueryParserTests {
         #expect(merged.searchTerms == ["Stripe"])
         #expect(merged.since == nil)
         #expect(merged.appFilter == nil)
+    }
+
+    @Test func parseExactAppNameUsesAppFilter() {
+        let result = parser.parse("Finder")
+
+        #expect(result.appFilter == "Finder")
+        #expect(result.searchTerms.isEmpty)
+    }
+
+    @Test func parseKnownAppFromNaturalLanguageUsesAppFilter() {
+        let result = parser.parse("What did I work on in Conductor?")
+
+        #expect(result.appFilter == "Conductor")
+        #expect(result.searchTerms.isEmpty)
+    }
+
+    @Test func parseBroadTodayQuestionDropsFillerTerms() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = parser.parse("What have I been working on today?", now: now)
+
+        #expect(result.since != nil)
+        #expect(result.searchTerms.isEmpty)
+    }
+
+    @Test func parseLastThirtyMinutesChatQuestionDropsTimeAndChatNoise() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = parser.parse("What did I chat with ashley about in the last 30 minutes?", now: now)
+
+        #expect(result.since != nil)
+        #expect(result.appFilter == "Messages")
+        #expect(result.searchTerms.map { $0.lowercased() } == ["ashley"])
+    }
+
+    @Test func parseKnownAppInsideTermsUsesAppFilter() {
+        let result = parser.parse("Ashley messages")
+
+        #expect(result.appFilter == "Messages")
+        #expect(result.searchTerms.map { $0.lowercased() } == ["ashley"])
+    }
+
+    @Test func mergeBestEffortIgnoresLLMTimeWithoutTimeHint() {
+        let regex = ParsedQuery(
+            searchTerms: ["Finder"],
+            since: nil,
+            appFilter: nil,
+            rawQuery: "Finder"
+        )
+        let llm = ParsedQuery(
+            searchTerms: ["Finder"],
+            since: "2026-03-21T19:43:21Z",
+            appFilter: "",
+            rawQuery: regex.rawQuery
+        )
+
+        let merged = parser.mergeBestEffort(regex: regex, llm: llm)
+
+        #expect(merged.appFilter == "Finder")
+        #expect(merged.since == nil)
+        #expect(merged.searchTerms.isEmpty)
     }
 }

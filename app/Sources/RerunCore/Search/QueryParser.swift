@@ -6,6 +6,13 @@ public struct ParsedQuery: Sendable {
     public let appFilter: String?
     public let rawQuery: String
 
+    public init(searchTerms: [String], since: String?, appFilter: String?, rawQuery: String) {
+        self.searchTerms = searchTerms
+        self.since = since
+        self.appFilter = appFilter
+        self.rawQuery = rawQuery
+    }
+
     public var effectiveQuery: String {
         searchTerms.isEmpty ? rawQuery : searchTerms.joined(separator: " ")
     }
@@ -19,6 +26,34 @@ public struct QueryParser: Sendable {
         "figma", "notion", "obsidian", "arc", "brave",
         "edge", "opera", "finder", "mail", "messages",
         "discord", "linear", "cursor", "warp",
+        "conductor", "dia",
+    ]
+    private static let fillerTerms: Set<String> = [
+        "a", "about", "am", "an", "anything", "are", "at", "been",
+        "browse", "browsed", "browsing",
+        "chat", "chatted", "chatting",
+        "did", "do", "does", "doing", "done",
+        "find", "for",
+        "happen", "happened", "happening", "has", "have",
+        "i", "in", "is", "it",
+        "look", "looked", "looking",
+        "me", "my",
+        "of", "on",
+        "say", "said", "search", "see", "seen", "show",
+        "talk", "talked", "talking", "tell", "that", "the", "there", "to",
+        "up", "use", "used", "using",
+        "visit", "visited",
+        "website", "websites", "web", "page", "pages", "site", "sites",
+        "activity", "activities", "project", "projects", "task", "tasks", "thing", "things",
+        "stuff", "everything", "anything", "recent", "recently",
+        "was", "were", "what", "when", "where", "which", "who",
+        "with", "work", "working", "write", "wrote",
+    ]
+    private static let timeHintTerms: Set<String> = [
+        "today", "yesterday", "morning", "afternoon", "evening",
+        "night", "week", "hour", "minute", "ago", "monday",
+        "tuesday", "wednesday", "thursday", "friday", "saturday",
+        "sunday",
     ]
 
     public init() {}
@@ -32,7 +67,7 @@ public struct QueryParser: Sendable {
             .map(String.init)
             .filter { !$0.isEmpty }
 
-        return ParsedQuery(
+        return finalize(
             searchTerms: terms,
             since: since,
             appFilter: appFilter,
@@ -94,6 +129,22 @@ public struct QueryParser: Sendable {
             return iso8601(calendar.date(byAdding: .hour, value: -1, to: now)!)
         }
 
+        // "last/past N minutes/hours/days/weeks"
+        let lastPattern = /(last|past)\s+(\d+)\s+(minute|hour|day|week)s?/
+        if let match = lower.firstMatch(of: lastPattern) {
+            guard let amount = Int(match.2) else { return nil }
+            let unit: Calendar.Component
+            switch match.3 {
+            case "minute": unit = .minute
+            case "hour": unit = .hour
+            case "day": unit = .day
+            case "week": unit = .weekOfYear
+            default: return nil
+            }
+            query.removeSubrange(match.range)
+            return iso8601(calendar.date(byAdding: unit, value: -amount, to: now)!)
+        }
+
         // "N days/hours/minutes ago"
         let agoPattern = /(\d+)\s+(minute|hour|day|week)s?\s+ago/
         if let match = lower.firstMatch(of: agoPattern) {
@@ -133,9 +184,9 @@ public struct QueryParser: Sendable {
         let lower = query.lowercased()
 
         // "in <app>" or "from <app>"
-        let appPattern = /(?:in|from)\s+(\w[\w\s]*?)(?:\s+(?:today|yesterday|last|this|\d)|$)/
+        let appPattern = /(?:in|from)\s+(\w[\w\s]*?)(?:\s+(?:today|yesterday|last|this|\d)|[?.!,]|$)/
         if let match = lower.firstMatch(of: appPattern) {
-            let candidate = String(match.1).trimmingCharacters(in: .whitespaces).lowercased()
+            let candidate = trimNoise(from: String(match.1)).trimmingCharacters(in: .whitespaces).lowercased()
             if Self.knownApps.contains(candidate) {
                 // Remove just the "in/from <app>" part
                 let prefixPattern = try! Regex("(?i)(?:in|from)\\s+" + NSRegularExpression.escapedPattern(for: candidate))
@@ -159,23 +210,193 @@ public struct QueryParser: Sendable {
     }
 
     func mergeBestEffort(regex: ParsedQuery, llm: ParsedQuery) -> ParsedQuery {
-        let appFilter = regex.appFilter ?? llm.appFilter
-        let since = regex.since ?? llm.since
-
-        let llmTerms = llm.searchTerms
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .filter { term in
-                guard let appFilter else { return true }
-                return term.caseInsensitiveCompare(appFilter) != .orderedSame
-            }
-
-        return ParsedQuery(
-            searchTerms: llmTerms.isEmpty ? regex.searchTerms : llmTerms,
-            since: since,
-            appFilter: appFilter,
+        let regexParsed = finalize(
+            searchTerms: regex.searchTerms,
+            since: regex.since,
+            appFilter: regex.appFilter,
             rawQuery: regex.rawQuery
         )
+        let llmParsed = finalize(
+            searchTerms: llm.searchTerms,
+            since: llm.since,
+            appFilter: llm.appFilter,
+            rawQuery: llm.rawQuery
+        )
+
+        let appFilter = regexParsed.appFilter ?? llmParsed.appFilter
+        let since = regexParsed.since ?? (containsTimeHint(regexParsed.rawQuery) ? llmParsed.since : nil)
+        let llmTerms = cleanSearchTerms(llmParsed.searchTerms, appFilter: appFilter)
+        let regexTerms = cleanSearchTerms(regexParsed.searchTerms, appFilter: appFilter)
+
+        return finalize(
+            searchTerms: llmTerms.isEmpty ? regexTerms : llmTerms,
+            since: since,
+            appFilter: appFilter,
+            rawQuery: regexParsed.rawQuery
+        )
+    }
+
+    private func finalize(
+        searchTerms: [String],
+        since: String?,
+        appFilter: String?,
+        rawQuery: String
+    ) -> ParsedQuery {
+        var normalizedApp = normalizeAppFilter(appFilter)
+        var normalizedTerms = cleanSearchTerms(searchTerms, appFilter: normalizedApp)
+
+        if normalizedApp == nil,
+           normalizedTerms.count == 1,
+           let appFromTerm = canonicalAppName(normalizedTerms[0]) {
+            normalizedApp = appFromTerm
+            normalizedTerms.removeAll()
+        } else if normalizedApp == nil {
+            let appTerms = normalizedTerms.compactMap { canonicalAppName($0) }
+            if let appFromTerms = appTerms.first {
+                normalizedApp = appFromTerms
+                normalizedTerms.removeAll { canonicalAppName($0) == appFromTerms }
+            }
+        }
+
+        if normalizedApp == nil, shouldInferMessagesApp(from: rawQuery) {
+            normalizedApp = "Messages"
+        }
+
+        if normalizedApp == nil, shouldInferBrowserApp(from: rawQuery) {
+            normalizedApp = "browser"
+            normalizedTerms.removeAll { Self.browserFillerTerms.contains($0.lowercased()) }
+        }
+
+        return ParsedQuery(
+            searchTerms: normalizedTerms,
+            since: normalizeSince(since),
+            appFilter: normalizedApp,
+            rawQuery: rawQuery
+        )
+    }
+
+    private func cleanSearchTerms(_ terms: [String], appFilter: String?) -> [String] {
+        // Split multi-word terms into individual words first
+        let expanded = terms.flatMap { $0.split(separator: " ").map(String.init) }
+        let cleaned = expanded
+            .map { trimNoise(from: $0) }
+            .filter { !$0.isEmpty }
+            .filter { term in
+                let lower = term.lowercased()
+                if Self.fillerTerms.contains(lower) || Self.timeHintTerms.contains(lower) || isTimeLikeTerm(lower) {
+                    return false
+                }
+                guard let appFilter else { return true }
+                return lower != appFilter.lowercased()
+            }
+
+        return stripTimeSequenceTokens(from: cleaned)
+    }
+
+    private func stripTimeSequenceTokens(from terms: [String]) -> [String] {
+        let lowerTerms = terms.map { $0.lowercased() }
+        let units: Set<String> = [
+            "minute", "minutes", "hour", "hours", "day", "days", "week", "weeks",
+        ]
+        let markers: Set<String> = ["last", "past"]
+
+        return terms.enumerated().compactMap { index, term in
+            let lower = lowerTerms[index]
+            let previous = index > 0 ? lowerTerms[index - 1] : nil
+            let next = index + 1 < lowerTerms.count ? lowerTerms[index + 1] : nil
+            let previousIsNumber = previous?.allSatisfy(\.isNumber) == true
+            let nextIsTimeUnit = next.map(units.contains) == true
+            let nextIsAgo = next == "ago"
+
+            if markers.contains(lower) {
+                return nil
+            }
+
+            if lower.allSatisfy(\.isNumber),
+               previous.map(markers.contains) == true || nextIsTimeUnit {
+                return nil
+            }
+
+            if units.contains(lower),
+               previousIsNumber || nextIsAgo {
+                return nil
+            }
+
+            if lower == "ago", previousIsNumber || previous.map(units.contains) == true {
+                return nil
+            }
+
+            return term
+        }
+    }
+
+    private func trimNoise(from term: String) -> String {
+        term.trimmingCharacters(
+            in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",.!?:;()[]{}\"'"))
+        )
+    }
+
+    private func normalizeAppFilter(_ appFilter: String?) -> String? {
+        guard let appFilter else { return nil }
+        let trimmed = trimNoise(from: appFilter).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.lowercased() != "nil", trimmed.lowercased() != "null" else { return nil }
+        return canonicalAppName(trimmed) ?? trimmed
+    }
+
+    private func canonicalAppName(_ candidate: String) -> String? {
+        let lower = candidate.lowercased()
+        guard Self.knownApps.contains(lower) else { return nil }
+        return lower.prefix(1).uppercased() + lower.dropFirst()
+    }
+
+    private func normalizeSince(_ since: String?) -> String? {
+        guard let since else { return nil }
+        let trimmed = since.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.lowercased() != "nil", trimmed.lowercased() != "null" else { return nil }
+        return SearchTimeParser.parseSince(trimmed)
+    }
+
+    private func shouldInferMessagesApp(from query: String) -> Bool {
+        let lower = query.lowercased()
+        return lower.contains("chat with")
+            || lower.contains("chatted with")
+            || lower.contains("message")
+            || lower.contains("messages")
+            || lower.contains("texted")
+            || lower.contains("talk to")
+            || lower.contains("talked to")
+            || lower.contains("said")
+            || lower.contains(" say")
+    }
+
+    private static let browserApps: Set<String> = [
+        "safari", "chrome", "firefox", "arc", "brave", "edge", "opera", "dia"
+    ]
+    private static let browserFillerTerms: Set<String> = [
+        "websites", "website", "web", "pages", "page", "sites", "site", "urls"
+    ]
+
+    private func shouldInferBrowserApp(from query: String) -> Bool {
+        let lower = query.lowercased()
+        return lower.contains("website") || lower.contains("web page")
+            || lower.contains("browsing") || lower.contains("browsed")
+            || (lower.contains("sites") && !lower.contains("outside"))
+    }
+
+    private func containsTimeHint(_ query: String) -> Bool {
+        let lower = query.lowercased()
+        if Self.timeHintTerms.contains(where: { lower.contains($0) }) {
+            return true
+        }
+        return lower.contains("last ") || lower.contains("this ") || lower.contains(" ago")
+    }
+
+    private func isTimeLikeTerm(_ term: String) -> Bool {
+        let lower = term.lowercased()
+        if Self.timeHintTerms.contains(where: { lower.contains($0) }) && lower.contains(where: \.isNumber) {
+            return true
+        }
+        return lower.hasPrefix("last ") || lower.hasPrefix("past ")
     }
 
     private func debugLog(_ message: String) {

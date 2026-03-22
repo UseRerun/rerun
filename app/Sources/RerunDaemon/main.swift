@@ -203,8 +203,13 @@ if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundle
     let statusBar = StatusBarController()
     statusBar.setup(daemon: daemon)
 
+    // AI model — start downloading in background immediately
+    let modelManager = ModelManager()
+    Task { await modelManager.startDownload() }
+    statusBar.setModelManager(modelManager)
+
     // Chat panel + global hotkey
-    let chatPanel = ChatPanel()
+    let chatPanel = ChatPanel(db: db, modelManager: modelManager)
     statusBar.setChatPanel(chatPanel)
 
     let hotkeyManager = HotkeyManager { chatPanel.toggle() }
