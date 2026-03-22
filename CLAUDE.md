@@ -35,7 +35,7 @@ cd app
 ./dev-smoke.sh
 ```
 
-`./dev.sh` exports `RERUN_PROFILE=dev`. `start` also defaults to `--target local`.
+`./dev.sh` exports `RERUN_PROFILE=dev`. `start` also defaults to `--target installed`.
 
 Do not use the default profile for normal dev verification unless the task is explicitly about production behavior. Dev/profile isolation exists to avoid stomping real user state.
 
@@ -54,6 +54,8 @@ Outputs:
 
 - `app/build/Rerun.app`
 - `app/build/RerunDev.app`
+
+`./dev.sh start` stages the dev app at `/Applications/RerunDev.app`.
 
 `RerunDev.app` launches as profile `dev` automatically from bundle identity. It also has separate macOS TCC permissions from `Rerun.app`, so expect separate Accessibility + Screen Recording grants.
 
@@ -101,7 +103,7 @@ Prod-specific checks should be explicit. Avoid killing or reusing the user's ins
 - SQLite (GRDB) with FTS5 + sqlite-vec for search
 - Markdown files at `~/rerun/` as portable source of truth
 - `--json` on every CLI command, semantic exit codes
-- macOS 26+ required (Foundation Models, NLContextualEmbedding)
+- macOS 15+ required (NLContextualEmbedding for embeddings, MLX for LLM synthesis)
 - AGPL-3.0 license
 
 ## Dev Workflow

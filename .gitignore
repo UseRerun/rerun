@@ -54,3 +54,7 @@ website/.vercel/
 *.pkg
 *.app
 *.profraw
+
+# Benchmark artifacts
+app/bench-*.sh
+app/bench-results-*

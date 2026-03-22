@@ -158,15 +158,41 @@ public actor DatabaseManager {
 
     public func fetchCaptures(since: String?, limit: Int? = nil) throws -> [Capture] {
         try dbPool.read { db in
+            let normalizedSince = canonicalSince(since)
             var request = Capture.order(Capture.Columns.timestamp.desc)
-            if let since {
-                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            if let normalizedSince {
+                request = request.filter(sql: "timestamp >= ?", arguments: [normalizedSince])
             }
             if let limit {
                 guard limit > 0 else { return [] }
                 request = request.limit(limit)
             }
             return try request.fetchAll(db)
+        }
+    }
+
+    public func fetchCaptures(app: String?, since: String?, limit: Int = 20) throws -> [Capture] {
+        try fetchCaptures(apps: app.map { [$0] }, since: since, limit: limit)
+    }
+
+    public func fetchCaptures(apps: [String]?, since: String?, limit: Int = 20) throws -> [Capture] {
+        try dbPool.read { db in
+            guard limit > 0 else { return [] }
+            let normalizedSince = canonicalSince(since)
+
+            var request = Capture.order(Capture.Columns.timestamp.desc)
+            if let apps, !apps.isEmpty {
+                let placeholders = apps.map { _ in "?" }.joined(separator: ", ")
+                request = request.filter(
+                    sql: "appName COLLATE NOCASE IN (\(placeholders))",
+                    arguments: StatementArguments(apps)
+                )
+            }
+            if let normalizedSince {
+                request = request.filter(sql: "timestamp >= ?", arguments: [normalizedSince])
+            }
+
+            return try request.limit(limit).fetchAll(db)
         }
     }
 
@@ -192,9 +218,10 @@ public actor DatabaseManager {
 
     public func captureCount(since: String?) throws -> Int {
         try dbPool.read { db in
+            let normalizedSince = canonicalSince(since)
             var request = Capture.all()
-            if let since {
-                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            if let normalizedSince {
+                request = request.filter(sql: "timestamp >= ?", arguments: [normalizedSince])
             }
             return try request.fetchCount(db)
         }
@@ -206,9 +233,10 @@ public actor DatabaseManager {
 
     public func oldestCaptureTimestamp(since: String?) throws -> String? {
         try dbPool.read { db in
+            let normalizedSince = canonicalSince(since)
             var request = Capture.order(Capture.Columns.timestamp.asc)
-            if let since {
-                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            if let normalizedSince {
+                request = request.filter(sql: "timestamp >= ?", arguments: [normalizedSince])
             }
             return try request.limit(1).fetchOne(db)?.timestamp
         }
@@ -220,9 +248,10 @@ public actor DatabaseManager {
 
     public func newestCaptureTimestamp(since: String?) throws -> String? {
         try dbPool.read { db in
+            let normalizedSince = canonicalSince(since)
             var request = Capture.order(Capture.Columns.timestamp.desc)
-            if let since {
-                request = request.filter(sql: "julianday(timestamp) >= julianday(?)", arguments: [since])
+            if let normalizedSince {
+                request = request.filter(sql: "timestamp >= ?", arguments: [normalizedSince])
             }
             return try request.limit(1).fetchOne(db)?.timestamp
         }
@@ -249,8 +278,9 @@ public actor DatabaseManager {
             guard limit > 0 else {
                 return []
             }
+            let normalizedSince = canonicalSince(since)
 
-            guard let pattern = FTS5Pattern(matchingAllPrefixesIn: query) else {
+            guard let pattern = makeFTSQuery(query) else {
                 return []
             }
 
@@ -258,38 +288,35 @@ public actor DatabaseManager {
                 SELECT capture.*
                 FROM capture
                 JOIN capture_fts ON capture_fts.rowid = capture.rowid
-                    AND capture_fts MATCH ?
+                    AND capture_fts MATCH \(sqlStringLiteral(pattern))
                 """
-            var arguments: [any DatabaseValueConvertible] = [pattern]
 
             var conditions: [String] = []
             if let app {
-                conditions.append("capture.appName = ? COLLATE NOCASE")
-                arguments.append(app)
+                conditions.append("capture.appName = \(sqlStringLiteral(app)) COLLATE NOCASE")
             }
-            if let since {
-                conditions.append("julianday(capture.timestamp) >= julianday(?)")
-                arguments.append(since)
+            if let normalizedSince {
+                conditions.append("capture.timestamp >= \(sqlStringLiteral(normalizedSince))")
             }
 
             if !conditions.isEmpty {
                 sql += " WHERE " + conditions.joined(separator: " AND ")
             }
 
-            sql += " ORDER BY rank LIMIT ?"
-            arguments.append(limit)
+            sql += " ORDER BY rank LIMIT \(limit)"
 
-            return try Capture.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            return try Capture.fetchAll(db, sql: sql)
         }
     }
 
     public func topApps(since: String? = nil, limit: Int = 10) throws -> [(appName: String, count: Int)] {
         try dbPool.read { db in
+            let normalizedSince = canonicalSince(since)
             var sql = "SELECT appName, COUNT(*) as cnt FROM capture"
             var arguments: [any DatabaseValueConvertible] = []
-            if let since {
-                sql += " WHERE julianday(timestamp) >= julianday(?)"
-                arguments.append(since)
+            if let normalizedSince {
+                sql += " WHERE timestamp >= ?"
+                arguments.append(normalizedSince)
             }
             sql += " GROUP BY appName ORDER BY cnt DESC LIMIT ?"
             arguments.append(limit)
@@ -300,11 +327,12 @@ public actor DatabaseManager {
 
     public func topURLs(since: String? = nil, limit: Int = 10) throws -> [(url: String, count: Int)] {
         try dbPool.read { db in
+            let normalizedSince = canonicalSince(since)
             var sql = "SELECT url, COUNT(*) as cnt FROM capture WHERE url IS NOT NULL"
             var arguments: [any DatabaseValueConvertible] = []
-            if let since {
-                sql += " AND julianday(timestamp) >= julianday(?)"
-                arguments.append(since)
+            if let normalizedSince {
+                sql += " AND timestamp >= ?"
+                arguments.append(normalizedSince)
             }
             sql += " GROUP BY url ORDER BY cnt DESC LIMIT ?"
             arguments.append(limit)
@@ -323,39 +351,105 @@ public actor DatabaseManager {
     ) throws -> [(capture: Capture, rank: Float)] {
         try dbPool.read { db in
             guard limit > 0 else { return [] }
-            guard let pattern = FTS5Pattern(matchingAllPrefixesIn: query) else { return [] }
+            let normalizedSince = canonicalSince(since)
+            guard let pattern = makeFTSQuery(query) else { return [] }
 
             var sql = """
                 SELECT capture.*, rank
                 FROM capture
                 JOIN capture_fts ON capture_fts.rowid = capture.rowid
-                    AND capture_fts MATCH ?
+                    AND capture_fts MATCH \(sqlStringLiteral(pattern))
                 """
-            var arguments: [any DatabaseValueConvertible] = [pattern]
 
             var conditions: [String] = []
             if let app {
-                conditions.append("capture.appName = ? COLLATE NOCASE")
-                arguments.append(app)
+                conditions.append("capture.appName = \(sqlStringLiteral(app)) COLLATE NOCASE")
             }
-            if let since {
-                conditions.append("julianday(capture.timestamp) >= julianday(?)")
-                arguments.append(since)
+            if let normalizedSince {
+                conditions.append("capture.timestamp >= \(sqlStringLiteral(normalizedSince))")
             }
             if !conditions.isEmpty {
                 sql += " WHERE " + conditions.joined(separator: " AND ")
             }
 
-            sql += " ORDER BY rank LIMIT ?"
-            arguments.append(limit)
+            sql += " ORDER BY rank LIMIT \(limit)"
 
-            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
+            let rows = try Row.fetchAll(db, sql: sql)
             return try rows.map { row in
                 let capture = try Capture(row: row)
                 let rank: Float = row["rank"]
                 return (capture: capture, rank: rank)
             }
         }
+    }
+
+    public func substringSearchCaptures(
+        query: String,
+        app: String? = nil,
+        since: String? = nil,
+        limit: Int = 20
+    ) throws -> [Capture] {
+        try dbPool.read { db in
+            guard limit > 0 else { return [] }
+            let normalizedSince = canonicalSince(since)
+            let terms = query
+                .split(whereSeparator: \.isWhitespace)
+                .map { $0.lowercased() }
+                .filter { !$0.isEmpty }
+            guard !terms.isEmpty else { return [] }
+
+            var conditions: [String] = []
+            if let app {
+                conditions.append("appName = \(sqlStringLiteral(app)) COLLATE NOCASE")
+            }
+            if let normalizedSince {
+                conditions.append("timestamp >= \(sqlStringLiteral(normalizedSince))")
+            }
+
+            let termConditions = terms.map { term in
+                let pattern = sqlLikeLiteral(term)
+                return """
+                    lower(textContent) LIKE \(pattern) ESCAPE '\\'
+                    OR lower(COALESCE(windowTitle, '')) LIKE \(pattern) ESCAPE '\\'
+                    OR lower(COALESCE(url, '')) LIKE \(pattern) ESCAPE '\\'
+                    OR lower(appName) LIKE \(pattern) ESCAPE '\\'
+                    """
+            }
+            conditions.append("(" + termConditions.joined(separator: " OR ") + ")")
+
+            let sql = """
+                SELECT *
+                FROM capture
+                WHERE \(conditions.joined(separator: " AND "))
+                ORDER BY timestamp DESC
+                LIMIT \(limit)
+                """
+
+            return try Capture.fetchAll(db, sql: sql)
+        }
+    }
+
+    private func makeFTSQuery(_ query: String) -> String? {
+        let allowedSymbols = CharacterSet(charactersIn: "+#./-_")
+        let normalized = query.precomposedStringWithCompatibilityMapping
+        let terms = normalized
+            .split(whereSeparator: \.isWhitespace)
+            .map { token in
+                token.unicodeScalars.map { scalar -> Character in
+                    if CharacterSet.alphanumerics.contains(scalar) || allowedSymbols.contains(scalar) {
+                        return Character(scalar)
+                    }
+                    return " "
+                }
+            }
+            .map { String($0).split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            .filter { !$0.isEmpty }
+
+        guard !terms.isEmpty else { return nil }
+
+        return terms
+            .map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"*" }
+            .joined(separator: " ")
     }
 
     public func findSimilarWithDistance(
@@ -366,9 +460,10 @@ public actor DatabaseManager {
     ) throws -> [(capture: Capture, distance: Float)] {
         try dbPool.read { db in
             guard limit > 0 else { return [] }
+            let normalizedSince = canonicalSince(since)
             let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
             let candidateLimit: Int
-            if app == nil && since == nil {
+            if app == nil && normalizedSince == nil {
                 candidateLimit = limit * 3
             } else {
                 // sqlite-vec can't push outer filters into the KNN query, so filtered
@@ -382,28 +477,31 @@ public actor DatabaseManager {
                 FROM (
                     SELECT capture_id, distance
                     FROM captures_vec
-                    WHERE embedding MATCH ? AND k = ?
+                    WHERE embedding MATCH :embedding AND k = :candidateLimit
                     ORDER BY distance
                 ) AS vec
                 JOIN capture ON capture.id = vec.capture_id
                 """
-            var arguments: [any DatabaseValueConvertible] = [blob, candidateLimit]
+            var arguments: [String: (any DatabaseValueConvertible)?] = [
+                "embedding": blob,
+                "candidateLimit": candidateLimit,
+            ]
 
             var conditions: [String] = []
             if let app {
-                conditions.append("capture.appName = ? COLLATE NOCASE")
-                arguments.append(app)
+                conditions.append("capture.appName = :app COLLATE NOCASE")
+                arguments["app"] = app
             }
-            if let since {
-                conditions.append("julianday(capture.timestamp) >= julianday(?)")
-                arguments.append(since)
+            if let normalizedSince {
+                conditions.append("capture.timestamp >= :since")
+                arguments["since"] = normalizedSince
             }
             if !conditions.isEmpty {
                 sql += " WHERE " + conditions.joined(separator: " AND ")
             }
 
-            sql += " ORDER BY vec.distance LIMIT ?"
-            arguments.append(limit)
+            sql += " ORDER BY vec.distance LIMIT :limit"
+            arguments["limit"] = limit
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(arguments))
             return try rows.map { row in
@@ -412,6 +510,24 @@ public actor DatabaseManager {
                 return (capture: capture, distance: distance)
             }
         }
+    }
+
+    private func canonicalSince(_ since: String?) -> String? {
+        guard let since else { return nil }
+        return SearchTimeParser.parseSince(since) ?? since
+    }
+
+    private func sqlStringLiteral(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "''"))'"
+    }
+
+    private func sqlLikeLiteral(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+            .replacingOccurrences(of: "'", with: "''")
+        return "'%" + escaped + "%'"
     }
 
     // MARK: - Vector Embeddings

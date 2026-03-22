@@ -10,6 +10,7 @@ struct RerunCommand: AsyncParsableCommand {
         subcommands: [
             StatusCommand.self,
             SearchCommand.self,
+            AskCommand.self,
             RecallCommand.self,
             ExcludeCommand.self,
             ExportCommand.self,

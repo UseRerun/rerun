@@ -10,6 +10,11 @@ final class ChatViewModel {
     var inputText: String = ""
     var isProcessing: Bool = false
     private var responseTask: Task<Void, Never>?
+    private let chatEngine: ChatEngine?
+
+    init(chatEngine: ChatEngine? = nil) {
+        self.chatEngine = chatEngine
+    }
 
     func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -22,16 +27,27 @@ final class ChatViewModel {
 
         responseTask?.cancel()
         responseTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .milliseconds(300))
-            } catch {
+            guard let engine = chatEngine else {
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                let echo = ChatMessage(role: .assistant, content: "Echo: \(text)")
+                messages.append(echo)
+                isProcessing = false
+                responseTask = nil
                 return
             }
 
+            let response = await engine.process(text)
+
             guard !Task.isCancelled else { return }
 
-            let echo = ChatMessage(role: .assistant, content: "Echo: \(text)")
-            messages.append(echo)
+            let message = ChatMessage(
+                role: .assistant,
+                content: response.content,
+                sources: response.sources,
+                summaryDebug: response.summaryDebug
+            )
+            messages.append(message)
             isProcessing = false
             responseTask = nil
         }

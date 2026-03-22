@@ -7,6 +7,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private weak var daemon: CaptureDaemon?
     private var statsTimer: Timer?
     private var chatPanel: ChatPanel?
+    private var modelManager: ModelManager?
     private let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
         ?? Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String
         ?? ProcessInfo.processInfo.processName
@@ -61,6 +62,29 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         chatItem.target = self
         menu.addItem(chatItem)
 
+        // Model status
+        if let modelManager {
+            switch modelManager.state {
+            case .idle:
+                break
+            case .downloading(let progress):
+                let pct = Int(progress * 100)
+                let item = NSMenuItem(title: "AI Model: Downloading \(pct)%", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            case .ready:
+                break
+            case .failed:
+                menu.addItem(NSMenuItem.separator())
+                let item = NSMenuItem(title: "AI Model: Download Failed", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+                let retry = NSMenuItem(title: "Retry Download\u{2026}", action: #selector(retryModelDownload), keyEquivalent: "")
+                retry.target = self
+                menu.addItem(retry)
+            }
+        }
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit \(appName)", action: #selector(quitApp), keyEquivalent: "q")
@@ -99,8 +123,16 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         self.chatPanel = panel
     }
 
+    func setModelManager(_ manager: ModelManager) {
+        self.modelManager = manager
+    }
+
     @objc private func toggleChat() {
         chatPanel?.toggle()
+    }
+
+    @objc private func retryModelDownload() {
+        Task { await modelManager?.retry() }
     }
 
     @objc private func quitApp() {
