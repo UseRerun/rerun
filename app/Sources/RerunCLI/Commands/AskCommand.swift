@@ -174,7 +174,7 @@ struct AskCommand: AsyncParsableCommand {
 
         let modelsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Rerun/models")
-        let modelId = "mlx-community/gemma-3-4b-it-qat-4bit"
+        let modelId = "mlx-community/phi-4-4bit"
 
         do {
             let hub = HubApi(downloadBase: modelsDir)
@@ -212,6 +212,11 @@ struct AskCommand: AsyncParsableCommand {
                     .replacingOccurrences(of: "<start_of_turn>", with: "")
                     .replacingOccurrences(of: "<bos>", with: "")
                     .replacingOccurrences(of: "<eos>", with: "")
+                    .replacingOccurrences(of: "<|endoftext|>", with: "")
+                    .replacingOccurrences(of: "<|assistant|>", with: "")
+                    .replacingOccurrences(of: "<|user|>", with: "")
+                    .replacingOccurrences(of: "<|system|>", with: "")
+                    .replacingOccurrences(of: "<|end|>", with: "")
                 if !cleaned.isEmpty {
                     print(cleaned, terminator: "")
                     fflush(stdout)
