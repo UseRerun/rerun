@@ -15,6 +15,7 @@ struct ChatView: View {
             inputBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.clear)
         .onAppear {
             isInputFocused = true
         }
@@ -26,6 +27,9 @@ struct ChatView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Spacer()
+            Image(systemName: "text.bubble")
+                .font(.system(size: 40))
+                .foregroundStyle(.quaternary)
             Text("Rerun Chat")
                 .font(.title2)
                 .foregroundStyle(.secondary)
@@ -45,15 +49,39 @@ struct ChatView: View {
                         MessageBubble(message: message)
                             .id(message.id)
                     }
+
+                    if viewModel.isProcessing {
+                        TypingIndicatorBubble()
+                            .id("typing")
+                            .transition(.opacity)
+                    }
                 }
                 .padding()
             }
             .onChange(of: viewModel.messages.count) {
-                if let last = viewModel.messages.last {
+                scrollToBottom(proxy: proxy)
+            }
+            .onChange(of: viewModel.messages.last?.content) {
+                scrollToBottom(proxy: proxy, animated: false)
+            }
+            .onChange(of: viewModel.isProcessing) {
+                if viewModel.isProcessing {
                     withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                        proxy.scrollTo("typing", anchor: .bottom)
                     }
                 }
+            }
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool = true) {
+        if let last = viewModel.messages.last {
+            if animated {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            } else {
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
     }
@@ -64,9 +92,9 @@ struct ChatView: View {
                 .textFieldStyle(.plain)
                 .focused($isInputFocused)
                 .onSubmit { viewModel.send() }
-                .disabled(viewModel.isProcessing)
+                .disabled(viewModel.isProcessing || viewModel.isStreaming)
 
-            if viewModel.isProcessing {
+            if viewModel.isProcessing || viewModel.isStreaming {
                 ProgressView()
                     .controlSize(.small)
             }

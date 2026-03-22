@@ -8,7 +8,7 @@ enum MessageRole: Sendable {
 struct ChatMessage: Identifiable, Sendable {
     let id: UUID
     let role: MessageRole
-    let content: String
+    var content: String
     let sources: [SourceReference]
     let summaryDebug: SummaryDebugInfo?
     let timestamp: Date

@@ -41,12 +41,22 @@ struct ChatEngineResponse: Sendable {
     let summaryDebug: SummaryDebugInfo?
 }
 
+struct ChatStreamResponse: Sendable {
+    let sources: [SourceReference]
+    let summaryDebug: SummaryDebugInfo?
+    let fallbackContent: String?
+    let recoveryContent: String?
+    let tokenStream: AsyncThrowingStream<String, Error>?
+}
+
 actor ChatEngine {
     private let service: SearchService
     private let summarySynthesizer: ChatSummarySynthesizer?
+    private let modelManager: ModelManager?
 
     init(db: DatabaseManager, modelManager: ModelManager) {
         self.service = SearchService(db: db)
+        self.modelManager = modelManager
         self.summarySynthesizer = { request in
             await ChatEngine.synthesizeWithMLX(request: request, modelManager: modelManager)
         }
@@ -54,8 +64,11 @@ actor ChatEngine {
 
     init(db: DatabaseManager, summarySynthesizer: ChatSummarySynthesizer?) {
         self.service = SearchService(db: db)
+        self.modelManager = nil
         self.summarySynthesizer = summarySynthesizer
     }
+
+    // MARK: - Non-streaming (used by CLI and tests)
 
     func process(_ message: String) async -> ChatEngineResponse {
         let response: SearchResponse
@@ -111,10 +124,113 @@ actor ChatEngine {
         return await buildResponse(from: response)
     }
 
+    // MARK: - Streaming (used by chat UI)
+
+    func processStreaming(_ message: String) async -> ChatStreamResponse {
+        let response: SearchResponse
+        do {
+            response = try await service.search(SearchRequest(query: message, limit: 10))
+        } catch {
+            logger.error("Search failed: \(error.localizedDescription)")
+            return ChatStreamResponse(
+                sources: [],
+                summaryDebug: nil,
+                fallbackContent: "Something went wrong searching your captures.",
+                recoveryContent: "Something went wrong searching your captures.",
+                tokenStream: nil
+            )
+        }
+
+        guard !response.hits.isEmpty else {
+            return ChatStreamResponse(
+                sources: [],
+                summaryDebug: nil,
+                fallbackContent: "Couldn't find anything matching that. Try a broader question.",
+                recoveryContent: "Couldn't find anything matching that. Try a broader question.",
+                tokenStream: nil
+            )
+        }
+
+        let sources = buildSources(from: response)
+
+        guard let summary = response.summary else {
+            return ChatStreamResponse(
+                sources: sources,
+                summaryDebug: nil,
+                fallbackContent: formatSearchResults(response),
+                recoveryContent: formatSearchResults(response),
+                tokenStream: nil
+            )
+        }
+
+        let captures = response.hits.map(\.capture)
+        let context = SearchService.buildContext(from: captures, maxTextLength: 1000)
+        let request = ChatSummaryRequest(parsed: response.parsed, summary: summary, captureContext: context)
+        let summaryDebug = request.debugInfo
+        let recoveryContent = formatFallbackSummary(request, captureCount: response.hits.count)
+
+        // Try MLX streaming
+        guard let modelManager = self.modelManager,
+              let container = await modelManager.getContainerIfReady(),
+              let captureContext = request.captureContext, !captureContext.isEmpty else {
+            return ChatStreamResponse(
+                sources: sources,
+                summaryDebug: summaryDebug,
+                fallbackContent: recoveryContent,
+                recoveryContent: recoveryContent,
+                tokenStream: nil
+            )
+        }
+
+        let query = request.rawQuery
+        let tokenStream = AsyncThrowingStream<String, Error> { continuation in
+            let task = Task.detached {
+                do {
+                    let instructions = ChatEngine.buildInstructions(context: captureContext)
+                    let params = GenerateParameters(maxTokens: 512)
+                    let session = ChatSession(container, instructions: instructions, generateParameters: params)
+
+                    for try await token in session.streamResponse(to: query) {
+                        if Task.isCancelled { break }
+                        let cleaned = ChatEngine.cleanToken(token)
+                        if !cleaned.isEmpty {
+                            continuation.yield(cleaned)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            // 30-second timeout
+            let timeout = Task.detached {
+                try? await Task.sleep(for: .seconds(30))
+                if !Task.isCancelled {
+                    task.cancel()
+                    continuation.finish()
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+                timeout.cancel()
+            }
+        }
+
+        return ChatStreamResponse(
+            sources: sources,
+            summaryDebug: summaryDebug,
+            fallbackContent: nil,
+            recoveryContent: recoveryContent,
+            tokenStream: tokenStream
+        )
+    }
+
     // MARK: - Response Building
 
-    private func buildResponse(from response: SearchResponse) async -> ChatEngineResponse {
-        let sources = response.hits.map { hit in
+    private func buildSources(from response: SearchResponse) -> [SourceReference] {
+        response.hits.map { hit in
             SourceReference(
                 captureId: hit.capture.id,
                 appName: hit.capture.appName,
@@ -124,6 +240,10 @@ actor ChatEngine {
                 snippet: hit.snippet
             )
         }
+    }
+
+    private func buildResponse(from response: SearchResponse) async -> ChatEngineResponse {
+        let sources = buildSources(from: response)
 
         let content: String
         var summaryDebug: SummaryDebugInfo? = nil
@@ -171,7 +291,6 @@ actor ChatEngine {
 
     private func synthesizeSummary(for request: ChatSummaryRequest) async -> String? {
         guard let summarySynthesizer else { return nil }
-        // Need either capture context (for MLX) or facts (for fallback)
         guard request.captureContext != nil || !request.facts.isEmpty else { return nil }
         return await summarySynthesizer(request)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -211,8 +330,41 @@ actor ChatEngine {
 
     // MARK: - LLM Synthesis
 
+    private static func buildInstructions(context: String) -> String {
+        """
+        You answer questions about the user's computer activity based ONLY on the data below.
+
+        IMPORTANT: Each entry's Content field may contain text from MULTIPLE apps that were visible on screen at the same time. The AppName in brackets is the FOCUSED app — but the Content may also include text from background windows, notifications, sidebars, and other apps. Be very careful to only reference content that clearly belongs to the focused app mentioned in brackets.
+
+        RULES:
+        1. Answer ONLY what was asked — don't summarize everything.
+        2. Each entry shows the app in brackets like [time, AppName]. ONLY use entries from apps relevant to the question. If the user asks about texting, only use Messages entries. If they ask about browsing, only use browser entries. Ignore entries from unrelated apps completely.
+        3. Within each entry, ignore content that clearly belongs to OTHER apps (email notifications, calendar alerts, unrelated app sidebars). Only reference content that logically belongs to the focused app.
+        4. Use natural time references: "Around 2pm...", "Earlier today..."
+        5. Never say "capture", "screenshot", "frame", "OCR", or "screen recording".
+        6. Use short paragraphs. For broad questions like "what was I working on", group by topic or app with line breaks between them. Keep each group to 1-2 sentences.
+        7. Start with the answer immediately — no preamble like "Based on the data" or "Here's what I found".
+        8. ACCURACY IS CRITICAL. Only state things you can directly see in the data. Never combine information from different apps or entries to invent a narrative. If the data is unclear or doesn't answer the question, say "I'm not sure based on what I can see" rather than guessing.
+
+        ACTIVITY DATA:
+        \(context)
+        """
+    }
+
+    private static func cleanToken(_ token: String) -> String {
+        token
+            .replacingOccurrences(of: "<end_of_turn>", with: "")
+            .replacingOccurrences(of: "<start_of_turn>", with: "")
+            .replacingOccurrences(of: "<bos>", with: "")
+            .replacingOccurrences(of: "<eos>", with: "")
+            .replacingOccurrences(of: "<|endoftext|>", with: "")
+            .replacingOccurrences(of: "<|assistant|>", with: "")
+            .replacingOccurrences(of: "<|user|>", with: "")
+            .replacingOccurrences(of: "<|system|>", with: "")
+            .replacingOccurrences(of: "<|end|>", with: "")
+    }
+
     private static func synthesizeWithMLX(request: ChatSummaryRequest, modelManager: ModelManager) async -> String? {
-        // Non-blocking: if model isn't downloaded yet, return nil so fallback facts are shown
         guard let container = await modelManager.getContainerIfReady() else {
             return nil
         }
@@ -221,23 +373,7 @@ actor ChatEngine {
         }
 
         do {
-            let instructions = """
-                You answer questions about the user's computer activity based ONLY on the data below.
-
-                RULES:
-                1. Answer ONLY what was asked — don't summarize everything.
-                2. Each entry shows the app in brackets like [time, AppName]. Focus on activities relevant to the question.
-                3. Describe what was DONE, not UI chrome that was merely visible on screen. Ignore sidebar labels, empty states, notification badges.
-                4. Use natural time references: "Around 2pm...", "Earlier today..."
-                5. Never say "capture", "screenshot", "frame", "OCR", or "screen recording".
-                6. Write 2-3 sentences, conversationally. Not a bulleted list.
-                7. Start with the answer immediately — no preamble like "Based on the data" or "Here's what I found".
-                8. If the data doesn't clearly answer the question, say so honestly.
-
-                ACTIVITY DATA:
-                \(context)
-                """
-
+            let instructions = buildInstructions(context: context)
             let params = GenerateParameters(maxTokens: 512)
             let session = ChatSession(container, instructions: instructions, generateParameters: params)
 
@@ -246,14 +382,7 @@ actor ChatEngine {
                 response.append(token)
             }
 
-            // Clean special tokens
-            response = response
-                .replacingOccurrences(of: "<end_of_turn>", with: "")
-                .replacingOccurrences(of: "<start_of_turn>", with: "")
-                .replacingOccurrences(of: "<bos>", with: "")
-                .replacingOccurrences(of: "<eos>", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
+            response = cleanToken(response).trimmingCharacters(in: .whitespacesAndNewlines)
             return response.isEmpty ? nil : response
         } catch {
             logger.warning("MLX synthesis failed: \(error.localizedDescription)")

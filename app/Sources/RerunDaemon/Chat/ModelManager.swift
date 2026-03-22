@@ -6,7 +6,7 @@ import os
 
 private let logger = Logger(subsystem: "com.rerun", category: "ModelManager")
 
-/// Manages the Gemma LLM model lifecycle: download, load, and retry.
+/// Manages the LLM model lifecycle: download, load, and retry.
 /// Downloads from Hugging Face on launch, resumes interrupted downloads automatically.
 /// Model stored in ~/Library/Application Support/Rerun/models/
 actor ModelManager {
@@ -21,7 +21,7 @@ actor ModelManager {
     /// Observable state for UI (menu bar, chat). MainActor-isolated so SwiftUI/AppKit can read directly.
     @MainActor private(set) var state: ModelState = .idle
 
-    private let modelId = "mlx-community/gemma-3-4b-it-qat-4bit"
+    private let modelId = "mlx-community/phi-4-4bit"
     private var container: ModelContainer?
     private var isLoading = false
 

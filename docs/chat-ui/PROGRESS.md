@@ -1,6 +1,6 @@
 # Chat UI Progress
 
-## Status: Phase 4 - Complete
+## Status: Phase 5 - Complete
 
 ## Quick Reference
 - Research: `docs/chat-ui/RESEARCH.md`
@@ -100,7 +100,25 @@
 ---
 
 ### Phase 5: Polish
-**Status:** Not Started
+**Status:** Complete
+
+#### Tasks Completed
+- Streaming LLM tokens to UI — `processStreaming()` on ChatEngine returns sources immediately + `AsyncThrowingStream<String, Error>` of MLX tokens; ChatViewModel consumes stream and updates message content progressively so words appear as the LLM generates them
+- Typing indicator — animated three-dot bubble (`TypingIndicatorBubble`) shown in message list during search phase, disappears when streaming begins
+- Keyboard shortcuts — `Cmd+K` and `Cmd+N` clear conversation via `NSEvent.addLocalMonitorForEvents` in ChatPanel
+- Panel size persistence — `setFrameAutosaveName("RerunChatPanel")` saves/restores size across sessions; position still follows cursor to correct monitor
+- Material background — `NSVisualEffectView` with `.sidebar` material wraps the NSHostingView; panel set to `backgroundColor = .clear, isOpaque = false`; SwiftUI root has `.background(.clear)` so vibrancy shows through
+- Empty state icon — `text.bubble` SF Symbol above "Rerun Chat" text
+- Scroll follows streaming — `.onChange(of: messages.last?.content)` triggers scroll-to-bottom without animation during streaming (prevents jitter); new messages still scroll with animation
+- Input disabled during streaming — `isProcessing || isStreaming` guards both TextField and send button
+
+#### Decisions Made
+- `AsyncThrowingStream` + `Task.detached` for MLX streaming — stream production runs in a detached task to avoid actor isolation issues; `continuation.onTermination` cancels the production task when consumer stops
+- Direct array mutation for streaming updates — `messages[lastIndex].content = accumulated` triggers `@Observable` change tracking; ~50 replacements over 5 seconds is negligible
+- `ChatMessage.content` changed from `let` to `var` to support in-place mutation during streaming
+- Extracted `buildInstructions()` and `cleanToken()` as static helpers — shared by both streaming and non-streaming synthesis paths
+- Stored `modelManager` directly on ChatEngine actor — needed for streaming path; test init sets it to nil
+- Skipped: app icons in source cards, animated message appearance, "no captures yet" distinct error, timestamp tooltips — low ROI for a startup
 
 ---
 
@@ -114,6 +132,7 @@
 ### 2026-03-22
 - Completed Phase 3: SearchService as shared retrieval API, wired CLI and chat
 - Completed Phase 4: MLX integration, Gemma 3 4B QAT, context-based synthesis, model management UI
+- Completed Phase 5: Streaming tokens to UI, typing indicator, Cmd+K shortcut, panel size persistence, material background, empty state icon
 - 142 tests passing across 18 suites
 
 ---
@@ -128,7 +147,7 @@
 - `Sources/RerunDaemon/Chat/ChatViewModel.swift` (new in P2, modified P3)
 - `Sources/RerunDaemon/Chat/ChatView.swift` (new in P2)
 - `Sources/RerunDaemon/Chat/MessageBubble.swift` (new in P2, modified P3, P4)
-- `Sources/RerunDaemon/Chat/ChatEngine.swift` (new in P3, rewritten P4)
+- `Sources/RerunDaemon/Chat/ChatEngine.swift` (new in P3, rewritten P4, streaming added P5)
 - `Sources/RerunDaemon/Chat/ModelManager.swift` (new in P4)
 - `Sources/RerunCLI/Commands/AskCommand.swift` (new in P3, rewritten P4)
 - `Sources/RerunCLI/Commands/SearchCommand.swift` (modified P3)

@@ -13,6 +13,7 @@ extension Notification.Name {
 final class ChatPanel {
     private let panel: NSPanel
     private let viewModel: ChatViewModel
+    private var keyMonitor: Any?
 
     init(db: DatabaseManager, modelManager: ModelManager) {
         logger.notice("Creating ChatPanel")
@@ -34,12 +35,62 @@ final class ChatPanel {
         panel.animationBehavior = .utilityWindow
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 400, height: 300)
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
 
+        // Persist panel size across sessions
+        panel.setFrameAutosaveName("RerunChatPanel")
+
+        // Material background with SwiftUI content
         let chatView = ChatView(viewModel: viewModel)
-        panel.contentView = NSHostingView(rootView: chatView)
+        let hostingView = NSHostingView(rootView: chatView)
+
+        let effectView = NSVisualEffectView()
+        effectView.material = .sidebar
+        effectView.state = .active
+        effectView.addSubview(hostingView)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: effectView.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
+        ])
+        panel.contentView = effectView
 
         // Escape to dismiss
         panel.standardWindowButton(.closeButton)?.isHidden = true
+
+        // Keyboard shortcuts
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.modifierFlags.contains(.command) else { return event }
+            switch event.charactersIgnoringModifiers {
+            case "k", "n":
+                self?.viewModel.newConversation()
+                return nil
+            case "a":
+                NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil)
+                return nil
+            case "c":
+                NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+                return nil
+            case "v":
+                NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+                return nil
+            case "x":
+                NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil)
+                return nil
+            case "z":
+                if event.modifierFlags.contains(.shift) {
+                    NSApp.sendAction(Selector(("redo:")), to: nil, from: nil)
+                } else {
+                    NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+                }
+                return nil
+            default:
+                return event
+            }
+        }
     }
 
     func toggle() {

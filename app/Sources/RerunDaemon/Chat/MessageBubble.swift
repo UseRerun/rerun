@@ -14,10 +14,6 @@ struct MessageBubble: View {
                 if message.role == .assistant && !message.sources.isEmpty {
                     SourceCardsView(sources: message.sources)
                 }
-
-                Text(message.timestamp, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
 
             if message.role == .assistant { Spacer(minLength: 60) }
@@ -26,12 +22,22 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var messageBody: some View {
-        bubbleText(message.content, role: message.role)
+        if message.role == .assistant && message.content.isEmpty {
+            TypingIndicatorBubble()
+        } else {
+            bubbleText(message.content, role: message.role)
+        }
     }
 }
 
 private func bubbleText(_ content: String, role: MessageRole) -> some View {
-    Text(content)
+    let rendered: Text = {
+        if role == .assistant, let attributed = try? AttributedString(markdown: content, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            return Text(attributed)
+        }
+        return Text(content)
+    }()
+    return rendered
         .foregroundStyle(role == .user ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -125,5 +131,35 @@ struct SourceCardView: View {
         let relative = RelativeDateTimeFormatter()
         relative.unitsStyle = .short
         return relative.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+struct TypingIndicatorBubble: View {
+    @State private var animating = false
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.secondary)
+                        .frame(width: 6, height: 6)
+                        .opacity(animating ? 0.3 : 1.0)
+                        .animation(
+                            .easeInOut(duration: 0.6)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.2),
+                            value: animating
+                        )
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Spacer(minLength: 60)
+        }
+        .onAppear { animating = true }
     }
 }
