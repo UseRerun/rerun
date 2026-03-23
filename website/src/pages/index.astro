@@ -1,5 +1,5 @@
 ---
-
+import version from '../data/version.json';
 ---
 
 <html lang="en">
@@ -314,6 +314,60 @@
 				.form-row button { width: 100%; }
 			}
 
+			/* Download */
+			.download-section {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 14px;
+				margin-bottom: 44px;
+			}
+
+			.download-label {
+				font-family: var(--font-mono);
+				font-size: 0.8rem;
+				color: var(--text-muted);
+				letter-spacing: 0.01em;
+			}
+
+			.download-btn {
+				display: inline-flex;
+				align-items: center;
+				gap: 10px;
+				padding: 13px 28px;
+				font-family: var(--font-display);
+				font-size: 0.95rem;
+				font-weight: 600;
+				border-radius: 10px;
+				border: 1px solid var(--border);
+				background: rgba(255, 255, 255, 0.03);
+				color: var(--text-primary) !important;
+				transition: all 0.25s ease;
+				text-decoration: none;
+			}
+
+			.download-btn:hover {
+				border-color: rgba(255, 255, 255, 0.15);
+				background: rgba(255, 255, 255, 0.06);
+				transform: translateY(-1px);
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+			}
+
+			.download-btn:active {
+				transform: translateY(0);
+			}
+
+			.download-btn svg {
+				fill: var(--text-secondary);
+			}
+
+			.download-meta {
+				font-family: var(--font-mono);
+				font-size: 0.7rem;
+				color: var(--text-muted);
+				letter-spacing: 0.01em;
+			}
+
 			/* Trust */
 			.hero-trust {
 				display: flex;
@@ -417,6 +471,15 @@
 						</div>
 						<div id="message"></div>
 					</form>
+				</div>
+
+					<div class="download-section">
+					<p class="download-label">Or try the alpha now</p>
+					<a href="https://github.com/usererun/rerun/releases/latest/download/Rerun.dmg" class="download-btn">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+						Download for macOS
+					</a>
+					<p class="download-meta">v{version.version} · macOS Tahoe+ · Open Source</p>
 				</div>
 
 				<div class="hero-trust">

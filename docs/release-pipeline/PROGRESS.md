@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 9 — Completed
+## Status: Phase 10 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -217,13 +217,25 @@
 ---
 
 ### Phase 10: Website Download Page
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Created `website/src/data/version.json` with `{ "version": "0.1.0" }`
+- Added download section to `website/src/pages/index.astro` below the waitlist
+- Download button links to `https://github.com/usererun/rerun/releases/latest/download/Rerun.dmg`
+- Version display reads from version.json: `v0.1.0 · macOS Tahoe+ · Open Source`
+- Download button styled as secondary/outline action (waitlist remains primary CTA)
+- Added version.json update step to `scripts/release.sh` after appcast commit
+- Updated `website/public/llms.txt` with download section
+- Added `download` capability to `website/src/pages/ai.json.ts`
+- Verified website builds successfully with `astro build`
 
 #### Decisions Made
-- (none yet)
+- Kept waitlist as primary CTA, download is secondary ("Or try the alpha now")
+- Download button uses outline/ghost style (border + transparent bg) to maintain visual hierarchy
+- Apple logo SVG in download button to communicate macOS-only
+- version.json gets its own commit in the release script (separate from appcast commit)
+- Kept existing eyebrow badge ("Open source & in development") unchanged
 
 #### Blockers
 - (none)
@@ -262,6 +274,7 @@
 - **Phase 7 completed:** Sparkle 2 added as SPM dependency, framework embedded in prod bundle with proper rpath and signing
 - **Phase 8 completed:** Sparkle updater controller wired up in daemon, "Check for Updates…" menu item added (prod only)
 - **Phase 9 completed:** Appcast generation added to release script — signs DMG, generates XML, preserves history, commits to website
+- **Phase 10 completed:** Download section added to website homepage (secondary CTA below waitlist), version.json created, release script updates version.json
 
 ---
 
@@ -276,6 +289,11 @@
 - `app/Sources/RerunDaemon/main.swift` — added Sparkle updater controller initialization (prod only)
 - `app/Sources/RerunDaemon/StatusBarController.swift` — added updater property, setter, and "Check for Updates…" menu item
 - `scripts/release.sh` — added appcast generation (sign DMG, generate XML, commit+push)
+- `website/src/data/version.json` — new, current version for website display
+- `website/src/pages/index.astro` — added download section below waitlist
+- `scripts/release.sh` — added version.json update step after appcast
+- `website/public/llms.txt` — added download section
+- `website/src/pages/ai.json.ts` — added download capability
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

@@ -32,6 +32,15 @@ export const GET: APIRoute = () => {
         returns:
           'JSON with success status, waitlist position, and referral code',
       },
+      {
+        id: 'download',
+        description:
+          'Download the Rerun alpha for macOS (DMG installer)',
+        endpoint: 'https://github.com/usererun/rerun/releases/latest/download/Rerun.dmg',
+        method: 'GET',
+        params: {},
+        returns: 'DMG installer file',
+      },
     ],
   };
 
