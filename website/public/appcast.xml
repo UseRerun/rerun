@@ -3,6 +3,20 @@
   <channel>
     <title>Rerun</title>
     <item>
+      <title>Version 0.1.1</title>
+      <sparkle:version>0.1.1</sparkle:version>
+      <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 23 Mar 2026 14:58:10 +0000</pubDate>
+      <description><![CDATA[<ul><li>Show AI model download progress in menubar and chat input instead of hiding model status</li><li>Chat input now displays download percentage and disables send until model is ready</li><li>Fix crash on empty captures table when running vector search</li><li>Model storage is now profile-scoped so dev and prod don't share model cache</li></ul>]]></description>
+      <enclosure
+        url="https://github.com/usererun/rerun/releases/download/v0.1.1/Rerun.dmg"
+        sparkle:edSignature="zK6ihPM/VIcvZTFFf1jdhawEngPy8T9slHAMU1N+JY2mXGRXAeF+6zxOjsgKcR93GBidCENZw6CEUKVkK8+RDA=="
+        length="16017981"
+        type="application/octet-stream"
+      />
+    </item>
+    <item>
       <title>Version 0.1.0</title>
       <sparkle:version>0.1.0</sparkle:version>
       <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
@@ -16,6 +30,5 @@
         type="application/octet-stream"
       />
     </item>
-
   </channel>
 </rss>
