@@ -119,10 +119,11 @@ The release script is the core automation. Start with the build + package steps 
 - [x] Load `.env` values and validate required variables (`APPLE_TEAM_ID`, `APPLE_ID`, `SIGNING_IDENTITY_NAME`)
 - [x] Accept `VERSION` as first argument
 - [x] Construct signing identity: `"Developer ID Application: ${SIGNING_IDENTITY_NAME} (${APPLE_TEAM_ID})"`
-- [x] Update version in `app/Sources/RerunCore/Rerun.swift` via sed
-- [x] Update version in `app/bundle.sh` default via sed
-- [x] Update version in `app/dev.sh` Info.plist heredoc via sed
-- [x] Update version in `app/Tests/RerunCoreTests/RerunCoreTests.swift` via sed
+- [x] Verify requested `VERSION` already matches the committed versions in:
+  - `app/Sources/RerunCore/Rerun.swift`
+  - `app/bundle.sh`
+  - `app/dev.sh`
+  - `app/Tests/RerunCoreTests/RerunCoreTests.swift`
 - [x] Call `cd app && VERSION="$VERSION" CODESIGN_IDENTITY="$SIGNING_IDENTITY" ./bundle.sh prod`
 - [x] Create simple DMG: temp dir with app + Applications symlink, `hdiutil create -format UDZO`
 - [x] Name DMG `Rerun.dmg` (stable name for GitHub latest URL)
@@ -131,7 +132,7 @@ The release script is the core automation. Start with the build + package steps 
 ### Success Criteria
 - `./scripts/release.sh 0.2.0` produces `app/build/Rerun.dmg`
 - DMG mounts, shows Rerun.app and Applications symlink
-- Version strings updated in all four files
+- Script fails fast if committed version files do not already match the requested version
 - App inside DMG launches correctly
 
 ### Files Likely Affected
@@ -181,11 +182,11 @@ Add git tagging, changelog extraction, and GitHub release creation to the releas
 Completes the release script. After this phase, `scripts/release.sh` is fully functional end-to-end (minus Sparkle appcast, which comes in Phase 9).
 
 ### Tasks
-- [ ] Add changelog extraction functions (from Chops/Clearly pattern): `extract_changelog` (HTML) and `extract_changelog_markdown` (raw MD)
-- [ ] After notarization: `git tag "v$VERSION"` and `git push origin "v$VERSION"`
-- [ ] Extract changelog for this version from `CHANGELOG.md`
-- [ ] Create GitHub release: `gh release create "v$VERSION" app/build/Rerun.dmg --title "Rerun v$VERSION" --notes "$CHANGELOG_MD"`
-- [ ] Fall back to `--generate-notes` if no changelog entry exists
+- [x] Add changelog extraction functions (from Chops/Clearly pattern): `extract_changelog` (HTML) and `extract_changelog_markdown` (raw MD)
+- [x] After notarization: `git tag "v$VERSION"` and `git push origin "v$VERSION"`
+- [x] Extract changelog for this version from `CHANGELOG.md`
+- [x] Create GitHub release: `gh release create "v$VERSION" app/build/Rerun.dmg --title "Rerun v$VERSION" --notes "$CHANGELOG_MD"`
+- [x] Fall back to `--generate-notes` if no changelog entry exists
 
 ### Success Criteria
 - Git tag `v0.2.0` created and pushed
