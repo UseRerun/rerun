@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-23
+
+### Fixed
+- Show AI model download progress in menubar and chat input instead of hiding model status
+- Chat input now displays download percentage and disables send until model is ready
+- Fix crash on empty captures table when running vector search
+- Model storage is now profile-scoped so dev and prod don't share model cache
+
 ## [0.1.0] - 2026-03-23
 
 ### Added
