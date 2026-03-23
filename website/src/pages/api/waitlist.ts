@@ -1,12 +1,20 @@
 import type { APIRoute } from 'astro';
+import { env } from 'cloudflare:workers';
 
 export const prerender = false;
 
-const RESEND_API_KEY = import.meta.env.RESEND_API_KEY || process.env.RESEND_API_KEY;
+const RESEND_API_KEY = env.RESEND_API_KEY;
 const SEGMENT_ID = '4158331b-e787-4bd5-851f-f159ed1b16a0';
 
 export const POST: APIRoute = async ({ request }) => {
   try {
+    if (!RESEND_API_KEY) {
+      return new Response(JSON.stringify({ error: 'Waitlist unavailable' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await request.json();
     const email = body.email?.trim();
 
