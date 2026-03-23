@@ -20,6 +20,14 @@ Response:
 {"success": true, "id": "..."}
 ```
 
+## Download
+
+An alpha version is available for macOS:
+
+https://github.com/usererun/rerun/releases/latest/download/Rerun.dmg
+
+Requires macOS Tahoe (15.0) or later.
+
 ## Links
 
 - [Website](https://usererun.com)

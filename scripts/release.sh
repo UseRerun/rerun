@@ -322,9 +322,25 @@ git -C "$REPO_ROOT" add website/public/appcast.xml
 git -C "$REPO_ROOT" commit -m "chore: update appcast for v$VERSION"
 git -C "$REPO_ROOT" push
 
+# --- Update website version ---
+
+echo "Updating website version.json..."
+mkdir -p "${REPO_ROOT}/website/src/data"
+cat > "${REPO_ROOT}/website/src/data/version.json" <<VJSON
+{ "version": "$VERSION" }
+VJSON
+git -C "$REPO_ROOT" add website/src/data/version.json
+if git -C "$REPO_ROOT" diff --cached --quiet -- website/src/data/version.json; then
+  echo "Website version already at v$VERSION; skipping commit."
+else
+  git -C "$REPO_ROOT" commit -m "chore: update website version to v$VERSION"
+  git -C "$REPO_ROOT" push
+fi
+
 echo ""
 echo "Release complete:"
 echo "  Version: $VERSION"
 echo "  DMG: $DMG_PATH"
 echo "  Appcast: website/public/appcast.xml"
+echo "  Version JSON: website/src/data/version.json"
 echo "  GitHub: https://github.com/usererun/rerun/releases/tag/v$VERSION"
