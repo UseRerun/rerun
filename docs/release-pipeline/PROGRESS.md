@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 10 — Completed
+## Status: Phase 11 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -243,13 +243,28 @@
 ---
 
 ### Phase 11: /release Skill
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Created `.claude/skills/release/SKILL.md` with full release orchestration flow
+- Step 1: Prerequisite checks (`.env`, notarytool credentials, clean tree, main branch, gh auth)
+- Step 2: Version determination from commit subjects + bodies with semver rules, user confirmation via `mcp__conductor__AskUserQuestion`
+- Step 3: Changelog drafting — rewrites commits for humans, groups under Keep a Changelog categories, user confirmation
+- Step 4: Version string updates across all four locations using Edit tool
+- Step 5: Website version.json update
+- Step 6: Explicit file staging, commit, and push
+- Step 7: Release script execution with fail-fast behavior
+- Step 8: Report with GitHub release URL
+- Hard rules embedded: never retry, never skip confirmation, never proceed past failure
 
 #### Decisions Made
-- (none yet)
+- Skill uses `mcp__conductor__AskUserQuestion` for version and changelog confirmation (Conductor-native interaction)
+- Version strings updated via Edit tool (not sed) for precision and auditability
+- Breaking-change detection reads full commit bodies, not just `git log --oneline`, so `BREAKING CHANGE` footers are visible
+- Accepts optional version argument (`/release 0.2.0`) to pre-fill the suggested version
+- If new version equals current version (first release scenario), skips version string updates entirely
+- Changelog rewriting is mandatory — raw commit messages are never acceptable as release notes
+- Files staged explicitly (no `git add -A`) to prevent accidental inclusion of sensitive files
 
 #### Blockers
 - (none)
@@ -275,10 +290,12 @@
 - **Phase 8 completed:** Sparkle updater controller wired up in daemon, "Check for Updates…" menu item added (prod only)
 - **Phase 9 completed:** Appcast generation added to release script — signs DMG, generates XML, preserves history, commits to website
 - **Phase 10 completed:** Download section added to website homepage (secondary CTA below waitlist), version.json created, release script updates version.json
+- **Phase 11 completed:** Created `/release` Claude skill at `.claude/skills/release/SKILL.md` — orchestrates version bump, changelog, and release script execution with user confirmation at key decision points
 
 ---
 
 ## Files Changed
+- `.claude/skills/release/SKILL.md` (new) — `/release` skill orchestrating the full release flow
 - `.env.example` (new) — credential template with placeholders
 - `CHANGELOG.md` (new) — Keep a Changelog format
 - `app/bundle.sh` — added hardened runtime plus MLX metallib compile/embed/sign steps for release bundles
