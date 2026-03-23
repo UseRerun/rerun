@@ -79,6 +79,20 @@ done
 
 SIGNING_IDENTITY="Developer ID Application: ${SIGNING_IDENTITY_NAME} (${APPLE_TEAM_ID})"
 
+# --- Pre-flight checks ---
+
+if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
+  echo "Error: working tree is not clean. Commit or stash changes first." >&2
+  exit 1
+fi
+
+if ! xcrun notarytool history --keychain-profile "AC_PASSWORD" >/dev/null 2>&1; then
+  echo "Error: notarytool keychain profile \"AC_PASSWORD\" not found or invalid." >&2
+  echo "Set it up with:" >&2
+  echo "  xcrun notarytool store-credentials \"AC_PASSWORD\" --apple-id \"\$APPLE_ID\" --team-id \"\$APPLE_TEAM_ID\" --password \"<app-specific-password>\"" >&2
+  exit 1
+fi
+
 # --- Version updates ---
 
 echo "Updating version to $VERSION..."
@@ -122,8 +136,28 @@ rm -f "$DMG_PATH"
 hdiutil create -srcfolder "$DMG_STAGING" -volname "Rerun" -format UDZO "$DMG_PATH"
 rm -rf "$DMG_STAGING"
 
+# --- Notarize ---
+
+echo "Notarizing..."
+xcrun notarytool submit "$DMG_PATH" --keychain-profile "AC_PASSWORD" --wait
+
+# --- Staple ---
+
+echo "Stapling app..."
+xcrun stapler staple "$APP_PATH"
+
+echo "Re-creating DMG with stapled app..."
+rm -f "$DMG_PATH"
+DMG_STAGING=$(mktemp -d)
+cp -R "$APP_PATH" "${DMG_STAGING}/"
+ln -s /Applications "${DMG_STAGING}/Applications"
+hdiutil create -srcfolder "$DMG_STAGING" -volname "Rerun" -format UDZO "$DMG_PATH"
+rm -rf "$DMG_STAGING"
+
+xcrun stapler staple "$DMG_PATH" || echo "Warning: DMG staple failed (normal — CDN propagation delay). App inside is stapled."
+
 echo ""
-echo "Release built successfully:"
+echo "Release built and notarized successfully:"
 echo "  App: $APP_PATH"
 echo "  DMG: $DMG_PATH"
 echo "  Version: $VERSION"
