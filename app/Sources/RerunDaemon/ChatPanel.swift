@@ -95,6 +95,7 @@ final class ChatPanel {
 
     func toggle() {
         logger.notice("toggle() called — currently visible: \(self.panel.isVisible)")
+        if OnboardingPanel.isActive { return }
         if panel.isVisible {
             hide()
         } else {

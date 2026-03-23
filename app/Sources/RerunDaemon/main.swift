@@ -202,10 +202,6 @@ if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundle
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
 
-    // Prompt for permissions if not yet granted
-    AccessibilityExtractor.requestAccessibilityIfNeeded()
-    OCRExtractor.requestScreenRecordingIfNeeded()
-
     // Menu bar status item
     let statusBar = StatusBarController()
     statusBar.setup(daemon: daemon)
@@ -218,6 +214,10 @@ if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundle
     let modelManager = ModelManager()
     Task { await modelManager.startDownload() }
     statusBar.setModelManager(modelManager)
+
+    // Onboarding — show setup checklist if permissions are missing
+    let onboardingPanel = OnboardingPanel(modelManager: modelManager, appVariant: appVariant)
+    onboardingPanel.showIfNeeded()
 
     // Chat panel + global hotkey
     let chatPanel = ChatPanel(db: db, modelManager: modelManager)

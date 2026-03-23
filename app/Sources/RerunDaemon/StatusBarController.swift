@@ -67,7 +67,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let chatItem = NSMenuItem(title: "Chat\u{2026}", action: #selector(toggleChat), keyEquivalent: "")
+        let chatItem = NSMenuItem(title: "Chat\u{2026}", action: #selector(toggleChat), keyEquivalent: " ")
+        chatItem.keyEquivalentModifierMask = [.command, .shift, .option]
         chatItem.target = self
         menu.addItem(chatItem)
 
