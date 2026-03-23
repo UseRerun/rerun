@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 6 — Completed
+## Status: Phase 7 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -136,13 +136,29 @@
 ---
 
 ### Phase 7: Sparkle — SPM Dependency + Framework Embedding
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added Sparkle 2.6.0+ dependency to `app/Package.swift`
+- Added `.product(name: "Sparkle", package: "Sparkle")` to RerunDaemon target only
+- Verified `swift build -c release` resolves and compiles with Sparkle
+- In `bundle.sh`, for both app bundles:
+  - Finds `Sparkle.framework` in `.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/`
+  - Copies to `Contents/Frameworks/Sparkle.framework`
+  - Adds rpath `@executable_path/../Frameworks` via `install_name_tool`
+  - Signs all framework internals (XPCServices, Updater.app, Autoupdate) with Developer ID + hardened runtime
+  - Signs the framework bundle itself
+- Added `SUFeedURL` (`https://usererun.com/appcast.xml`) and `SUPublicEDKey` (placeholder) to prod Info.plist via PlistBuddy only
+- Verified app launches without dylib-not-found crash
+- Verified dev bundle launches with embedded Sparkle but no Sparkle plist keys
+- All 144 tests pass
 
 #### Decisions Made
-- (none yet)
+- Used PlistBuddy to append Sparkle keys after the heredoc rather than conditionalizing the heredoc — cleaner separation
+- Embedded Sparkle in both bundles because the shared `rerun-daemon` binary hard-links the framework once the SPM product is added; prod-only metadata remains gated by bundle ID
+- Added `disable-library-validation` only for ad-hoc (`CODESIGN_IDENTITY=-`) bundle verification so local hardened-runtime builds can launch with embedded Sparkle
+- `SUPublicEDKey` is `PLACEHOLDER_KEY` until EdDSA keys are generated (one-time manual step before first release)
+- Framework signing uses `--options runtime` on all components for notarization compatibility
 
 #### Blockers
 - (none)
@@ -220,6 +236,7 @@
 - **Phase 5 follow-up:** fixed the release flow so the app is notarized before packaging and the final shipped DMG is notarized as its own artifact
 - **Phase 6 completed:** Added changelog extraction, git tagging, and GitHub release creation to `scripts/release.sh`
 - **Phase 6 follow-up:** `scripts/release.sh` now validates committed version files instead of rewriting them, so release tags point at the actual shipped source
+- **Phase 7 completed:** Sparkle 2 added as SPM dependency, framework embedded in prod bundle with proper rpath and signing
 
 ---
 
@@ -229,6 +246,8 @@
 - `app/bundle.sh` — added hardened runtime plus MLX metallib compile/embed/sign steps for release bundles
 - `scripts/release.sh` — release automation: version bump, build, DMG creation, notarization, stapling
 - `.env.example` — expanded with notarytool setup instructions
+- `app/Package.swift` — added Sparkle 2.6.0+ dependency to RerunDaemon target
+- `app/bundle.sh` — added Sparkle framework embedding, rpath, Info.plist keys, and signing (prod only)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

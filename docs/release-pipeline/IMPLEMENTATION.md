@@ -207,19 +207,20 @@ Add Sparkle 2 as an SPM dependency and embed the framework in the production app
 Sparkle is a dynamic framework. SPM downloads it as a binary xcframework, but `swift build` doesn't create app bundles — `bundle.sh` must manually embed it. This is the trickiest phase because rpath handling is fiddly.
 
 ### Tasks
-- [ ] Add Sparkle dependency to `app/Package.swift`: `.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")`
-- [ ] Add `.product(name: "Sparkle", package: "Sparkle")` to RerunDaemon target dependencies
-- [ ] Run `cd app && swift build` to download Sparkle and verify it compiles
-- [ ] In `bundle.sh`'s `build_bundle()`, for production bundle only (`$bundle_id == "com.rerun.app"`):
+- [x] Add Sparkle dependency to `app/Package.swift`: `.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")`
+- [x] Add `.product(name: "Sparkle", package: "Sparkle")` to RerunDaemon target dependencies
+- [x] Run `cd app && swift build` to download Sparkle and verify it compiles
+- [x] In `bundle.sh`'s `build_bundle()`:
   - Find Sparkle.framework in `.build/artifacts/` or `.build/release/`
   - Copy to `${contents}/Frameworks/`
   - Sign with Developer ID + hardened runtime
-- [ ] Fix rpath: use `install_name_tool -add_rpath @executable_path/../Frameworks` on the binary, or copy framework to `${contents}/MacOS/` where SPM's default `@loader_path` resolves
-- [ ] Generate EdDSA key pair: run `generate_keys` from Sparkle's bin directory (one-time, stores private key in Keychain)
-- [ ] Add Sparkle Info.plist keys to production bundle in `bundle.sh` (conditional on bundle_id):
+- [x] Keep Sparkle Info.plist keys prod-only (`com.rerun.app`), but embed the framework in both app bundles because the shared daemon binary links Sparkle dynamically
+- [x] Fix rpath: use `install_name_tool -add_rpath @executable_path/../Frameworks` on the binary, or copy framework to `${contents}/MacOS/` where SPM's default `@loader_path` resolves
+- [x] Generate EdDSA key pair: run `generate_keys` from Sparkle's bin directory (one-time, stores private key in Keychain)
+- [x] Add Sparkle Info.plist keys to production bundle in `bundle.sh` (conditional on bundle_id):
   - `SUFeedURL` → appcast URL
   - `SUPublicEDKey` → the generated public key
-- [ ] Build and verify: `./bundle.sh prod`, check framework is embedded and signed
+- [x] Build and verify: `./bundle.sh prod`, check framework is embedded and signed
 
 ### Success Criteria
 - `swift build` succeeds with Sparkle dependency
