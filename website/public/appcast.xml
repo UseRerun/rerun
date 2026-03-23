@@ -1,0 +1,21 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title>Rerun</title>
+    <item>
+      <title>Version 0.1.0</title>
+      <sparkle:version>0.1.0</sparkle:version>
+      <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 23 Mar 2026 14:15:38 +0000</pubDate>
+      <description><![CDATA[<ul><li>Continuous screen capture with Accessibility API text extraction and Vision OCR fallback</li><li>SQLite database with FTS5 full-text search and sqlite-vec semantic search</li><li>Markdown file export to ~/rerun/ as portable source of truth</li><li>CLI with status, search, recall, export, config, exclude, and daemon control commands</li><li>Menubar daemon with background capture and adaptive pacing</li><li>Floating chat panel with global hotkey</li><li>Search-backed chat responses with local LLM synthesis via MLX</li><li>Privacy exclusion system with app and URL pattern filtering</li><li>Automated daily summary and index file generation</li><li>Dev/prod app isolation with separate profiles and TCC permissions</li><li>Release pipeline with code signing, notarization, and DMG packaging</li><li>Sparkle auto-updater with EdDSA-signed appcast</li><li>Marketing website with download section</li></ul>]]></description>
+      <enclosure
+        url="https://github.com/usererun/rerun/releases/download/v0.1.0/Rerun.dmg"
+        sparkle:edSignature="wM/3e2Ef3Qpj1zi/jcGcAEYxkKpE77QXCwWaErOSHVuaRlybJJi5H6ToW/QKXVIoX95LZ18FiNTqTFn/wGBVBw=="
+        length="16015718"
+        type="application/octet-stream"
+      />
+    </item>
+
+  </channel>
+</rss>
