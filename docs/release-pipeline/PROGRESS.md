@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 8 — Completed
+## Status: Phase 9 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -188,13 +188,28 @@
 ---
 
 ### Phase 9: Sparkle — Appcast Generation
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added appcast generation section to `scripts/release.sh` after GitHub release creation
+- Finds `sign_update` binary in `.build/artifacts/sparkle/Sparkle/bin/`
+- Signs DMG with EdDSA via `sign_update`, parses signature and length from output
+- Extracts HTML changelog using existing `extract_changelog()` function
+- Generates appcast XML with new item prepended, preserving existing items via awk filter
+- Writes to `website/public/appcast.xml`
+- Commits and pushes appcast after generation
+- Description element omitted when no changelog entry exists
+- Added appcast path to release summary output
+- All 144 tests pass
 
 #### Decisions Made
-- (none yet)
+- No initial empty appcast file — first release creates it, subsequent releases preserve+prepend
+- Reused existing `extract_changelog()` (HTML) for appcast description, not `extract_changelog_markdown()`
+- Awk filter excludes items matching the current version to allow re-releases without duplicates
+- `minimumSystemVersion` set to `15.0` (macOS 15+ per project requirements)
+- Download URL uses GitHub releases pattern: `https://github.com/usererun/rerun/releases/download/v$VERSION/Rerun.dmg`
+- No `|| true` on commit — appcast must always change on a new release; failure means something is wrong
+- `sign_update` reads EdDSA private key from Keychain automatically (same key generated in Phase 7 setup)
 
 #### Blockers
 - (none)
@@ -246,6 +261,7 @@
 - **Phase 6 follow-up:** `scripts/release.sh` now validates committed version files instead of rewriting them, so release tags point at the actual shipped source
 - **Phase 7 completed:** Sparkle 2 added as SPM dependency, framework embedded in prod bundle with proper rpath and signing
 - **Phase 8 completed:** Sparkle updater controller wired up in daemon, "Check for Updates…" menu item added (prod only)
+- **Phase 9 completed:** Appcast generation added to release script — signs DMG, generates XML, preserves history, commits to website
 
 ---
 
@@ -259,6 +275,7 @@
 - `app/bundle.sh` — added Sparkle framework embedding, rpath, Info.plist keys, and signing (prod only)
 - `app/Sources/RerunDaemon/main.swift` — added Sparkle updater controller initialization (prod only)
 - `app/Sources/RerunDaemon/StatusBarController.swift` — added updater property, setter, and "Check for Updates…" menu item
+- `scripts/release.sh` — added appcast generation (sign DMG, generate XML, commit+push)
 
 ## Architectural Decisions
 (Major technical decisions and rationale)

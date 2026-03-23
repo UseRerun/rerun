@@ -259,8 +259,72 @@ else
     --generate-notes
 fi
 
+# --- Appcast generation ---
+
+echo "Generating appcast..."
+SPARKLE_BIN=$(find "${REPO_ROOT}/app/.build/artifacts" -path "*/sparkle/Sparkle/bin" -maxdepth 4 -type d 2>/dev/null | head -1)
+if [[ -z "$SPARKLE_BIN" ]]; then
+  echo "Error: Sparkle bin not found in .build/artifacts" >&2
+  exit 1
+fi
+
+SIGNATURE=$("$SPARKLE_BIN/sign_update" "$DMG_PATH" 2>&1)
+ED_SIG=$(echo "$SIGNATURE" | grep -o 'sparkle:edSignature="[^"]*"' | cut -d'"' -f2)
+LENGTH=$(echo "$SIGNATURE" | grep -o 'length="[^"]*"' | cut -d'"' -f2)
+PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+
+CHANGELOG_HTML=$(extract_changelog "$VERSION" "${REPO_ROOT}/CHANGELOG.md")
+
+APPCAST_PATH="${REPO_ROOT}/website/public/appcast.xml"
+EXISTING_ITEMS=""
+if [ -f "$APPCAST_PATH" ]; then
+  EXISTING_ITEMS=$(awk '
+    /<item>/ { buf=""; capture=1 }
+    capture { buf = buf $0 "\n" }
+    /<\/item>/ {
+      capture=0
+      if (buf !~ /<sparkle:version>'"$VERSION"'</) printf "%s", buf
+    }
+  ' "$APPCAST_PATH")
+fi
+
+DESCRIPTION=""
+if [ -n "$CHANGELOG_HTML" ]; then
+  DESCRIPTION="      <description><![CDATA[$CHANGELOG_HTML]]></description>"
+fi
+
+cat > "$APPCAST_PATH" <<EOF
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title>Rerun</title>
+    <item>
+      <title>Version $VERSION</title>
+      <sparkle:version>$VERSION</sparkle:version>
+      <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>$PUB_DATE</pubDate>
+$DESCRIPTION
+      <enclosure
+        url="https://github.com/usererun/rerun/releases/download/v$VERSION/Rerun.dmg"
+        sparkle:edSignature="$ED_SIG"
+        length="$LENGTH"
+        type="application/octet-stream"
+      />
+    </item>
+$EXISTING_ITEMS
+  </channel>
+</rss>
+EOF
+
+echo "Updating appcast..."
+git -C "$REPO_ROOT" add website/public/appcast.xml
+git -C "$REPO_ROOT" commit -m "chore: update appcast for v$VERSION"
+git -C "$REPO_ROOT" push
+
 echo ""
 echo "Release complete:"
 echo "  Version: $VERSION"
 echo "  DMG: $DMG_PATH"
+echo "  Appcast: website/public/appcast.xml"
 echo "  GitHub: https://github.com/usererun/rerun/releases/tag/v$VERSION"

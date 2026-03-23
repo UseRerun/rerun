@@ -80,7 +80,7 @@ build_bundle() {
     <key>CFBundleExecutable</key>
     <string>${bundle_name}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
     <key>CFBundlePackageType</key>

@@ -276,15 +276,15 @@ Add appcast.xml generation to the release script so Sparkle can discover and del
 Sparkle checks the appcast URL for new versions. The release script must generate a signed appcast entry for each release and commit it to the website.
 
 ### Tasks
-- [ ] In `scripts/release.sh`, after GitHub release creation:
+- [x] In `scripts/release.sh`, after GitHub release creation:
   - Find `sign_update` binary in `.build/artifacts/sparkle/Sparkle/bin/`
   - Get EdDSA signature for the DMG: `$SIGN_UPDATE app/build/Rerun.dmg`
   - Parse signature and length from output
   - Extract HTML changelog from CHANGELOG.md
-- [ ] Generate appcast XML with new item, preserving existing items (awk pattern from Chops/Clearly)
-- [ ] Write to `website/public/appcast.xml`
-- [ ] Commit and push: `git add website/public/appcast.xml && git commit -m "chore: update appcast for v$VERSION" && git push`
-- [ ] Create initial empty appcast or let first release create it
+- [x] Generate appcast XML with new item, preserving existing items (awk pattern from Chops/Clearly)
+- [x] Write to `website/public/appcast.xml`
+- [x] Commit and push: `git add website/public/appcast.xml && git commit -m "chore: update appcast for v$VERSION" && git push`
+- [x] Create initial empty appcast or let first release create it
 
 ### Success Criteria
 - After a release, `website/public/appcast.xml` contains valid Sparkle XML
