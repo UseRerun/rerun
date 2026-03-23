@@ -1,10 +1,11 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
-import vercel from '@astrojs/vercel';
+import { defineConfig, sessionDrivers } from 'astro/config';
+import cloudflare from '@astrojs/cloudflare';
 
 // https://astro.build/config
 export default defineConfig({
-  adapter: vercel({
-    imageService: true,
-  }),
+  adapter: cloudflare(),
+  session: {
+    driver: sessionDrivers.lruCache(),
+  },
 });
