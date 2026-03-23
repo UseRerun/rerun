@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 1 — Not Started
+## Status: Phase 1 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -11,13 +11,16 @@
 ## Phase Progress
 
 ### Phase 1: Config Scaffolding
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Created `.env.example` with placeholder credentials (APPLE_TEAM_ID, APPLE_ID, SIGNING_IDENTITY_NAME) and notarization setup comment
+- Created `CHANGELOG.md` with Keep a Changelog format and `[Unreleased]` section
+- Verified `.env` is gitignored
 
 #### Decisions Made
-- (none yet)
+- Followed Clearly's `.env.example` pattern (includes notarization setup instructions as comments)
+- Kept CHANGELOG minimal — just the structure, no retroactive entries for 0.1.0
 
 #### Blockers
 - (none)
@@ -170,11 +173,13 @@
 - Completed research phase — `docs/release-pipeline/RESEARCH.md`
 - Completed implementation planning — `docs/release-pipeline/IMPLEMENTATION.md`
 - Set up progress tracking
+- **Phase 1 completed:** `.env.example` and `CHANGELOG.md` created
 
 ---
 
 ## Files Changed
-(Will be updated as implementation progresses)
+- `.env.example` (new) — credential template with placeholders
+- `CHANGELOG.md` (new) — Keep a Changelog format
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
