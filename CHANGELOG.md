@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-23
+
+### Added
+
+- Onboarding setup checklist shown on launch when permissions are missing (Accessibility, Screen Recording, App Management) or the AI model isn't downloaded
+- Keyboard shortcut (⌘⇧⌥Space) displayed in the menu bar Chat item
+
 ## [0.1.1] - 2026-03-23
 
 ### Fixed
