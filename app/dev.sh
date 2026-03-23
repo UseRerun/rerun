@@ -20,16 +20,22 @@ if [[ ${1-} == "start" ]]; then
     # Only update the binary if the source actually changed — preserves TCC permissions.
     # We track the source hash separately because codesigning modifies the destination
     # binary, so direct cmp would always show a difference.
-    HASH_FILE="${CONTENTS}/.source-hash"
+    HASH_FILE="/Applications/.rerundev-source-hash"
     SRC_HASH=$(md5 -q "$SRC")
     OLD_HASH=""
     if [[ -f "$HASH_FILE" ]]; then
         OLD_HASH=$(cat "$HASH_FILE")
     fi
 
+    NEEDS_SIGN=0
+
     if [[ "$SRC_HASH" != "$OLD_HASH" ]]; then
         cp "$SRC" "$DEST"
         echo "$SRC_HASH" > "$HASH_FILE"
+        NEEDS_SIGN=1
+
+        # Ensure rpath for Sparkle framework
+        install_name_tool -add_rpath @executable_path/../Frameworks "$DEST" 2>/dev/null || true
 
         # Compile MLX Metal shaders into metallib if needed
         MLX_METALLIB="${CONTENTS}/MacOS/mlx.metallib"
@@ -51,8 +57,6 @@ if [[ ${1-} == "start" ]]; then
             cp "$MLX_METALLIB" "$CLI_METALLIB"
         fi
 
-        CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Sabotage Media, LLC (W33JZPPPFN)}"
-        codesign --force --sign "${CODESIGN_IDENTITY}" "${APP_DIR}" 2>/dev/null || codesign --force --sign - "${APP_DIR}" 2>/dev/null || true
         echo "Updated RerunDev.app binary"
     fi
 
@@ -94,6 +98,40 @@ if [[ ${1-} == "start" ]]; then
 </dict>
 </plist>
 PLIST
+        NEEDS_SIGN=1
+    fi
+
+    # Determine signing identity — prefer Developer ID, fall back to ad-hoc
+    CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Sabotage Media, LLC (W33JZPPPFN)}"
+    if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "${CODESIGN_IDENTITY}"; then
+        CODESIGN_IDENTITY="-"
+    fi
+
+    # Embed Sparkle framework if not already present
+    SPARKLE_FW=$(find .build/artifacts -path "*/macos-arm64_x86_64/Sparkle.framework" -type d 2>/dev/null | head -1)
+    if [[ -n "$SPARKLE_FW" ]] && [[ ! -d "${CONTENTS}/Frameworks/Sparkle.framework" ]]; then
+        mkdir -p "${CONTENTS}/Frameworks"
+        cp -a "$SPARKLE_FW" "${CONTENTS}/Frameworks/Sparkle.framework"
+        install_name_tool -add_rpath @executable_path/../Frameworks "$DEST" 2>/dev/null || true
+
+        # Sign framework internals (inner-to-outer, matching bundle.sh)
+        FW="${CONTENTS}/Frameworks/Sparkle.framework"
+        codesign --force --sign "${CODESIGN_IDENTITY}" "$FW/Versions/B/XPCServices/Downloader.xpc"
+        codesign --force --sign "${CODESIGN_IDENTITY}" "$FW/Versions/B/XPCServices/Installer.xpc"
+        codesign --force --sign "${CODESIGN_IDENTITY}" "$FW/Versions/B/Updater.app"
+        codesign --force --sign "${CODESIGN_IDENTITY}" "$FW/Versions/B/Autoupdate"
+        codesign --force --sign "${CODESIGN_IDENTITY}" "$FW/Versions/B/Sparkle"
+        codesign --force --sign "${CODESIGN_IDENTITY}" "$FW"
+        echo "Embedded Sparkle.framework"
+        NEEDS_SIGN=1
+    fi
+
+    # Sign everything (after all bundle contents are assembled)
+    if [[ $NEEDS_SIGN -eq 1 ]]; then
+        if [[ -f "${CONTENTS}/MacOS/mlx.metallib" ]]; then
+            codesign --force --sign "${CODESIGN_IDENTITY}" "${CONTENTS}/MacOS/mlx.metallib"
+        fi
+        codesign --force --sign "${CODESIGN_IDENTITY}" "${APP_DIR}"
     fi
 fi
 
