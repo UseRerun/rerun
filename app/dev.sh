@@ -56,6 +56,12 @@ if [[ ${1-} == "start" ]]; then
         echo "Updated RerunDev.app binary"
     fi
 
+    # Copy dev icon
+    mkdir -p "${CONTENTS}/Resources"
+    cp "resources/AppIconDev.icns" "${CONTENTS}/Resources/AppIconDev.icns" 2>/dev/null || true
+    cp resources/MenuBarIcon.png "${CONTENTS}/Resources/MenuBarIcon.png" 2>/dev/null || true
+    cp "resources/MenuBarIcon@2x.png" "${CONTENTS}/Resources/MenuBarIcon@2x.png" 2>/dev/null || true
+
     # Create Info.plist if missing
     if [[ ! -f "${CONTENTS}/Info.plist" ]]; then
         cat > "${CONTENTS}/Info.plist" << 'PLIST'
@@ -71,6 +77,8 @@ if [[ ${1-} == "start" ]]; then
     <string>RerunDev</string>
     <key>CFBundleExecutable</key>
     <string>RerunDev</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIconDev</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
