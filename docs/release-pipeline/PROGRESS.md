@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 4 — Completed
+## Status: Phase 5 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -87,13 +87,26 @@
 ---
 
 ### Phase 5: Release Script — Notarize + Staple
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added clean working tree check (`git status --porcelain`) before version updates
+- Added notarytool keychain profile validation at script start (`notarytool history --keychain-profile "AC_PASSWORD"`)
+- Added app archive creation for app notarization (`ditto -c -k --keepParent`)
+- Added `xcrun notarytool submit --wait` for the app archive before packaging
+- Added `xcrun stapler staple` on the app
+- Creates the final DMG from the stapled app
+- Signs the final DMG with the Developer ID identity
+- Added `xcrun notarytool submit --wait` for the final DMG
+- Attempts DMG staple with graceful failure (CDN propagation delay is expected)
+- Expanded `.env.example` with step-by-step notarytool setup instructions
+- Corrected the flow so the shipped DMG is the same artifact submitted to Apple
 
 #### Decisions Made
-- (none yet)
+- `--page-size` flag doesn't exist on `notarytool history` — use bare `notarytool history --keychain-profile` instead (matches Chops/Clearly)
+- Notarize the app before DMG packaging, then notarize the final DMG separately — rebuilding a DMG after notarization invalidates the shipped artifact
+- Sign the final DMG before notarizing it — notarization alone does not give the disk image a usable code signature
+- DMG staple failure is non-fatal (CDN delay) — the app inside is stapled and the final DMG was still submitted for notarization
 
 #### Blockers
 - (none)
@@ -195,13 +208,17 @@
 - **Phase 3 completed:** `bundle.sh` now compiles, embeds, and signs `mlx.metallib` for release bundles
 - **Phase 4 completed:** `scripts/release.sh` created — bumps version in 4 files, builds via bundle.sh, creates DMG
 
+### 2026-03-23
+- **Phase 5 follow-up:** fixed the release flow so the app is notarized before packaging and the final shipped DMG is notarized as its own artifact
+
 ---
 
 ## Files Changed
 - `.env.example` (new) — credential template with placeholders
 - `CHANGELOG.md` (new) — Keep a Changelog format
 - `app/bundle.sh` — added hardened runtime plus MLX metallib compile/embed/sign steps for release bundles
-- `scripts/release.sh` (new) — release automation: version bump, build, DMG creation
+- `scripts/release.sh` — release automation: version bump, build, DMG creation, notarization, stapling
+- `.env.example` — expanded with notarytool setup instructions
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
