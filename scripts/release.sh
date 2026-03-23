@@ -93,6 +93,91 @@ create_dmg() {
   rm -rf "$dmg_staging"
 }
 
+extract_changelog() {
+  local version="$1"
+  local changelog="$2"
+  local in_section=false
+  local html="<ul>"
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^##\ \[${version}\] ]]; then
+      in_section=true
+      continue
+    fi
+    if $in_section && [[ "$line" =~ ^##\  ]]; then
+      break
+    fi
+    if $in_section && [[ "$line" =~ ^-\ (.+) ]]; then
+      html+="<li>${BASH_REMATCH[1]}</li>"
+    fi
+  done < "$changelog"
+
+  html+="</ul>"
+  if [ "$html" = "<ul></ul>" ]; then
+    echo ""
+  else
+    echo "$html"
+  fi
+}
+
+extract_changelog_markdown() {
+  local version="$1"
+  local changelog="$2"
+  local in_section=false
+  local md=""
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^##\ \[${version}\] ]]; then
+      in_section=true
+      continue
+    fi
+    if $in_section && [[ "$line" =~ ^##\  ]]; then
+      break
+    fi
+    if $in_section && [[ "$line" =~ ^-\ (.+) ]]; then
+      md+="- ${BASH_REMATCH[1]}"$'\n'
+    fi
+  done < "$changelog"
+
+  echo "$md"
+}
+
+extract_swift_version() {
+  sed -n 's/.*public static let version = "\([^"]*\)".*/\1/p' "$1" | head -n 1
+}
+
+extract_bundle_default_version() {
+  sed -n 's/^VERSION="\${VERSION:-\([^"]*\)}"/\1/p' "$1" | head -n 1
+}
+
+extract_plist_version() {
+  awk '
+    /CFBundleShortVersionString/ {
+      getline
+      if (match($0, /<string>([^<]+)<\/string>/)) {
+        value = substr($0, RSTART + 8, RLENGTH - 17)
+        print value
+        exit
+      }
+    }
+  ' "$1"
+}
+
+extract_test_version() {
+  sed -n 's/.*#expect(Rerun.version == "\([^"]*\)").*/\1/p' "$1" | head -n 1
+}
+
+require_version_match() {
+  local file="$1"
+  local actual="$2"
+
+  if [[ "$actual" != "$VERSION" ]]; then
+    echo "Error: ${file} has version ${actual:-<missing>}, expected $VERSION." >&2
+    echo "Update version files and commit them before running scripts/release.sh." >&2
+    exit 1
+  fi
+}
+
 # --- Pre-flight checks ---
 
 if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
@@ -100,30 +185,21 @@ if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
   exit 1
 fi
 
+require_version_match "app/Sources/RerunCore/Rerun.swift" \
+  "$(extract_swift_version "${REPO_ROOT}/app/Sources/RerunCore/Rerun.swift")"
+require_version_match "app/bundle.sh" \
+  "$(extract_bundle_default_version "${REPO_ROOT}/app/bundle.sh")"
+require_version_match "app/dev.sh" \
+  "$(extract_plist_version "${REPO_ROOT}/app/dev.sh")"
+require_version_match "app/Tests/RerunCoreTests/RerunCoreTests.swift" \
+  "$(extract_test_version "${REPO_ROOT}/app/Tests/RerunCoreTests/RerunCoreTests.swift")"
+
 if ! xcrun notarytool history --keychain-profile "AC_PASSWORD" >/dev/null 2>&1; then
   echo "Error: notarytool keychain profile \"AC_PASSWORD\" not found or invalid." >&2
   echo "Set it up with:" >&2
   echo "  xcrun notarytool store-credentials \"AC_PASSWORD\" --apple-id \"\$APPLE_ID\" --team-id \"\$APPLE_TEAM_ID\" --password \"<app-specific-password>\"" >&2
   exit 1
 fi
-
-# --- Version updates ---
-
-echo "Updating version to $VERSION..."
-
-sed -i '' 's/public static let version = "[^"]*"/public static let version = "'"$VERSION"'"/' \
-  "${REPO_ROOT}/app/Sources/RerunCore/Rerun.swift"
-
-sed -i '' 's/VERSION="${VERSION:-[^}]*}"/VERSION="${VERSION:-'"$VERSION"'}"/' \
-  "${REPO_ROOT}/app/bundle.sh"
-
-sed -i '' '/CFBundleShortVersionString/{n;s/<string>[^<]*</<string>'"$VERSION"'</;}' \
-  "${REPO_ROOT}/app/dev.sh"
-
-sed -i '' 's/#expect(Rerun.version == "[^"]*")/#expect(Rerun.version == "'"$VERSION"'")/' \
-  "${REPO_ROOT}/app/Tests/RerunCoreTests/RerunCoreTests.swift"
-
-echo "Updated version to $VERSION in all files"
 
 # --- Build ---
 
@@ -165,8 +241,26 @@ echo "Stapling DMG..."
 xcrun stapler staple "$DMG_PATH" || echo "Warning: DMG staple failed (normal — CDN propagation delay). App inside is stapled."
 rm -f "$APP_ZIP_PATH"
 
+# --- Tag + GitHub Release ---
+
+echo "Tagging v$VERSION..."
+git -C "$REPO_ROOT" tag "v$VERSION"
+git -C "$REPO_ROOT" push origin "v$VERSION"
+
+echo "Creating GitHub release..."
+CHANGELOG_MD=$(extract_changelog_markdown "$VERSION" "${REPO_ROOT}/CHANGELOG.md")
+if [ -n "$CHANGELOG_MD" ]; then
+  gh release create "v$VERSION" "$DMG_PATH" \
+    --title "Rerun v$VERSION" \
+    --notes "$CHANGELOG_MD"
+else
+  gh release create "v$VERSION" "$DMG_PATH" \
+    --title "Rerun v$VERSION" \
+    --generate-notes
+fi
+
 echo ""
-echo "Release built and notarized successfully:"
-echo "  App: $APP_PATH"
-echo "  DMG: $DMG_PATH"
+echo "Release complete:"
 echo "  Version: $VERSION"
+echo "  DMG: $DMG_PATH"
+echo "  GitHub: https://github.com/usererun/rerun/releases/tag/v$VERSION"
