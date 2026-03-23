@@ -115,18 +115,18 @@ Create `scripts/release.sh` that builds the app and creates a DMG.
 The release script is the core automation. Start with the build + package steps before adding notarization (which requires credential setup).
 
 ### Tasks
-- [ ] Create `scripts/release.sh` with `set -euo pipefail`
-- [ ] Source `.env` and validate required variables (`APPLE_TEAM_ID`, `APPLE_ID`, `SIGNING_IDENTITY_NAME`)
-- [ ] Accept `VERSION` as first argument
-- [ ] Construct signing identity: `"Developer ID Application: ${SIGNING_IDENTITY_NAME} (${APPLE_TEAM_ID})"`
-- [ ] Update version in `app/Sources/RerunCore/Rerun.swift` via sed
-- [ ] Update version in `app/bundle.sh` default via sed
-- [ ] Update version in `app/dev.sh` Info.plist heredoc via sed
-- [ ] Update version in `app/Tests/RerunCoreTests/RerunCoreTests.swift` via sed
-- [ ] Call `cd app && VERSION="$VERSION" CODESIGN_IDENTITY="$SIGNING_IDENTITY" ./bundle.sh prod`
-- [ ] Create simple DMG: temp dir with app + Applications symlink, `hdiutil create -format UDZO`
-- [ ] Name DMG `Rerun.dmg` (stable name for GitHub latest URL)
-- [ ] Make script executable
+- [x] Create `scripts/release.sh` with `set -euo pipefail`
+- [x] Load `.env` values and validate required variables (`APPLE_TEAM_ID`, `APPLE_ID`, `SIGNING_IDENTITY_NAME`)
+- [x] Accept `VERSION` as first argument
+- [x] Construct signing identity: `"Developer ID Application: ${SIGNING_IDENTITY_NAME} (${APPLE_TEAM_ID})"`
+- [x] Update version in `app/Sources/RerunCore/Rerun.swift` via sed
+- [x] Update version in `app/bundle.sh` default via sed
+- [x] Update version in `app/dev.sh` Info.plist heredoc via sed
+- [x] Update version in `app/Tests/RerunCoreTests/RerunCoreTests.swift` via sed
+- [x] Call `cd app && VERSION="$VERSION" CODESIGN_IDENTITY="$SIGNING_IDENTITY" ./bundle.sh prod`
+- [x] Create simple DMG: temp dir with app + Applications symlink, `hdiutil create -format UDZO`
+- [x] Name DMG `Rerun.dmg` (stable name for GitHub latest URL)
+- [x] Make script executable
 
 ### Success Criteria
 - `./scripts/release.sh 0.2.0` produces `app/build/Rerun.dmg`

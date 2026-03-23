@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 3 — Completed
+## Status: Phase 4 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -63,13 +63,23 @@
 ---
 
 ### Phase 4: Release Script — Build + DMG
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Created `scripts/release.sh` with `set -euo pipefail`
+- Loads `.env` values and validates `APPLE_TEAM_ID`, `APPLE_ID`, `SIGNING_IDENTITY_NAME`
+- Accepts `VERSION` as first argument with semver validation
+- Constructs signing identity from env vars
+- Updates version via sed in all 4 files: `Rerun.swift`, `bundle.sh`, `dev.sh`, test file
+- Delegates build to `cd app && VERSION="$VERSION" CODESIGN_IDENTITY="$SIGNING_IDENTITY" ./bundle.sh prod`
+- Creates DMG via temp dir with app + Applications symlink, `hdiutil create -format UDZO`
+- DMG named `Rerun.dmg` (stable name for GitHub latest URL)
+- Verified all 4 sed patterns produce correct output
 
 #### Decisions Made
-- (none yet)
+- Simple DMG (Clearly-style) — no background image or Finder layout scripting
+- Validate `APPLE_ID` even though Phase 4 doesn't use it — catches misconfiguration early before Phase 5 adds notarization
+- `REPO_ROOT` derived from script location so it works from any working directory
 
 #### Blockers
 - (none)
@@ -183,6 +193,7 @@
 - **Phase 1 completed:** `.env.example` and `CHANGELOG.md` created
 - **Phase 2 completed:** Hardened runtime verified on a Developer ID-signed local bundle; app launched and chat returned a visible response without extra entitlements
 - **Phase 3 completed:** `bundle.sh` now compiles, embeds, and signs `mlx.metallib` for release bundles
+- **Phase 4 completed:** `scripts/release.sh` created — bumps version in 4 files, builds via bundle.sh, creates DMG
 
 ---
 
@@ -190,6 +201,7 @@
 - `.env.example` (new) — credential template with placeholders
 - `CHANGELOG.md` (new) — Keep a Changelog format
 - `app/bundle.sh` — added hardened runtime plus MLX metallib compile/embed/sign steps for release bundles
+- `scripts/release.sh` (new) — release automation: version bump, build, DMG creation
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
