@@ -3,6 +3,7 @@ import Foundation
 import AppKit
 import Dispatch
 import ServiceManagement
+import Sparkle
 
 // Quick AX diagnostic if --test-ax flag is passed
 if CommandLine.arguments.contains("--test-ax") {
@@ -178,6 +179,8 @@ Task { @MainActor in
 }
 
 if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundleIdentifier) {
+    var updaterController: SPUStandardUpdaterController?
+
     if appVariant == .production {
         // Running inside production .app bundle — register as login item for auto-start
         let service = SMAppService.mainApp
@@ -189,6 +192,10 @@ if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundle
                 fputs("Login item registration failed: \(error.localizedDescription)\n", stderr)
             }
         }
+
+        // Sparkle auto-updater — prod only (dev builds lack SUFeedURL/SUPublicEDKey)
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     }
 
     // Use NSApplication for proper macOS app identity (no Dock icon)
@@ -202,6 +209,10 @@ if let appVariant = RerunAppVariant.variant(bundleIdentifier: Bundle.main.bundle
     // Menu bar status item
     let statusBar = StatusBarController()
     statusBar.setup(daemon: daemon)
+
+    if let updaterController {
+        statusBar.setUpdaterController(updaterController)
+    }
 
     // AI model — start downloading in background immediately
     let modelManager = ModelManager()

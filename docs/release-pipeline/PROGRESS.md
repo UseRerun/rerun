@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 7 — Completed
+## Status: Phase 8 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -166,13 +166,21 @@
 ---
 
 ### Phase 8: Sparkle — Updater Integration
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added `import Sparkle` to `main.swift` and `StatusBarController.swift`
+- Created `SPUStandardUpdaterController` inside `if appVariant == .production` block with `startingUpdater: true`
+- Added `updaterController` property and `setUpdaterController()` setter to `StatusBarController`
+- Added "Check for Updates…" menu item in `buildMenu()` targeting `SPUStandardUpdaterController.checkForUpdates(_:)` directly
+- Menu item only appears in production builds (gated by updaterController being non-nil)
+- All 144 tests pass
 
 #### Decisions Made
-- (none yet)
+- Updater controller created production-only (dev builds lack `SUFeedURL`/`SUPublicEDKey` in Info.plist)
+- Used `#selector(SPUStandardUpdaterController.checkForUpdates(_:))` directly on the menu item target — no wrapper method needed since it's `@IBAction`
+- No delegates — default Sparkle behavior (automatic periodic checks, standard update UI) is correct
+- `var updaterController: SPUStandardUpdaterController?` hoisted to outer scope so it's accessible after the production block and stays alive through `app.run()`
 
 #### Blockers
 - (none)
@@ -237,6 +245,7 @@
 - **Phase 6 completed:** Added changelog extraction, git tagging, and GitHub release creation to `scripts/release.sh`
 - **Phase 6 follow-up:** `scripts/release.sh` now validates committed version files instead of rewriting them, so release tags point at the actual shipped source
 - **Phase 7 completed:** Sparkle 2 added as SPM dependency, framework embedded in prod bundle with proper rpath and signing
+- **Phase 8 completed:** Sparkle updater controller wired up in daemon, "Check for Updates…" menu item added (prod only)
 
 ---
 
@@ -248,6 +257,8 @@
 - `.env.example` — expanded with notarytool setup instructions
 - `app/Package.swift` — added Sparkle 2.6.0+ dependency to RerunDaemon target
 - `app/bundle.sh` — added Sparkle framework embedding, rpath, Info.plist keys, and signing (prod only)
+- `app/Sources/RerunDaemon/main.swift` — added Sparkle updater controller initialization (prod only)
+- `app/Sources/RerunDaemon/StatusBarController.swift` — added updater property, setter, and "Check for Updates…" menu item
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
