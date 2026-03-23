@@ -75,7 +75,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         if let modelManager {
             switch modelManager.state {
             case .idle:
-                break
+                let item = NSMenuItem(title: "AI Model: Preparing\u{2026}", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
             case .downloading(let progress):
                 let pct = Int(progress * 100)
                 let item = NSMenuItem(title: "AI Model: Downloading \(pct)%", action: nil, keyEquivalent: "")

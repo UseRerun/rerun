@@ -18,7 +18,7 @@ final class ChatPanel {
     init(db: DatabaseManager, modelManager: ModelManager) {
         logger.notice("Creating ChatPanel")
         let engine = ChatEngine(db: db, modelManager: modelManager)
-        viewModel = ChatViewModel(chatEngine: engine)
+        viewModel = ChatViewModel(chatEngine: engine, modelManager: modelManager)
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],

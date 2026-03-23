@@ -462,15 +462,16 @@ public actor DatabaseManager {
             guard limit > 0 else { return [] }
             let normalizedSince = canonicalSince(since)
             let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+            let rowCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM captures_vec") ?? 0
+            guard rowCount > 0 else { return [] }
             let candidateLimit: Int
             if app == nil && normalizedSince == nil {
-                candidateLimit = limit * 3
+                candidateLimit = min(limit * 3, rowCount)
             } else {
                 // sqlite-vec can't push outer filters into the KNN query, so filtered
                 // searches need the full candidate set to avoid dropping valid matches.
-                candidateLimit = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM captures_vec") ?? 0
+                candidateLimit = rowCount
             }
-            guard candidateLimit > 0 else { return [] }
 
             var sql = """
                 SELECT capture.*, vec.distance
