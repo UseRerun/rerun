@@ -148,13 +148,13 @@ Add notarization and stapling to the release script.
 Without notarization, macOS Gatekeeper will show a scary "unidentified developer" warning (or outright block the app on newer macOS). This is a hard requirement for distribution.
 
 ### Tasks
-- [ ] Add notarytool keychain profile validation at script start: `xcrun notarytool history --keychain-profile "AC_PASSWORD" --page-size 1`
-- [ ] Add clean working tree check: `git status --porcelain` must be empty
-- [ ] After DMG creation: `xcrun notarytool submit app/build/Rerun.dmg --keychain-profile "AC_PASSWORD" --wait`
-- [ ] Staple the app: `xcrun stapler staple app/build/Rerun.app`
-- [ ] Re-create DMG with stapled app (same hdiutil command)
-- [ ] Staple the DMG: `xcrun stapler staple app/build/Rerun.dmg` (may fail due to CDN delay — non-fatal)
-- [ ] Document one-time notarytool setup in `.env.example` comments
+- [x] Add notarytool keychain profile validation at script start: `xcrun notarytool history --keychain-profile "AC_PASSWORD"`
+- [x] Add clean working tree check: `git status --porcelain` must be empty
+- [x] After DMG creation: `xcrun notarytool submit app/build/Rerun.dmg --keychain-profile "AC_PASSWORD" --wait`
+- [x] Staple the app: `xcrun stapler staple app/build/Rerun.app`
+- [x] Re-create DMG with stapled app (same hdiutil command)
+- [x] Staple the DMG: `xcrun stapler staple app/build/Rerun.dmg` (may fail due to CDN delay — non-fatal)
+- [x] Document one-time notarytool setup in `.env.example` comments
 
 ### Success Criteria
 - `xcrun notarytool submit` succeeds (status: Accepted)

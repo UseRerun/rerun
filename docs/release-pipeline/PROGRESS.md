@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 4 — Completed
+## Status: Phase 5 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -87,13 +87,21 @@
 ---
 
 ### Phase 5: Release Script — Notarize + Staple
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added clean working tree check (`git status --porcelain`) before version updates
+- Added notarytool keychain profile validation at script start (`notarytool history --keychain-profile "AC_PASSWORD"`)
+- Added `xcrun notarytool submit --wait` after DMG creation
+- Added `xcrun stapler staple` on the app
+- Re-creates DMG with stapled app after stapling
+- Attempts DMG staple with graceful failure (CDN propagation delay is expected)
+- Expanded `.env.example` with step-by-step notarytool setup instructions
+- Verified end-to-end: notarization status Accepted, app staple validated
 
 #### Decisions Made
-- (none yet)
+- `--page-size` flag doesn't exist on `notarytool history` — use bare `notarytool history --keychain-profile` instead (matches Chops/Clearly)
+- DMG staple failure is non-fatal (CDN delay) — the app inside is stapled, which is what matters
 
 #### Blockers
 - (none)
@@ -195,13 +203,17 @@
 - **Phase 3 completed:** `bundle.sh` now compiles, embeds, and signs `mlx.metallib` for release bundles
 - **Phase 4 completed:** `scripts/release.sh` created — bumps version in 4 files, builds via bundle.sh, creates DMG
 
+### 2026-03-23
+- **Phase 5 completed:** Notarization + stapling added to release script; verified end-to-end with real Apple credentials (submission c10a3e4c, status: Accepted, app staple validated)
+
 ---
 
 ## Files Changed
 - `.env.example` (new) — credential template with placeholders
 - `CHANGELOG.md` (new) — Keep a Changelog format
 - `app/bundle.sh` — added hardened runtime plus MLX metallib compile/embed/sign steps for release bundles
-- `scripts/release.sh` (new) — release automation: version bump, build, DMG creation
+- `scripts/release.sh` — release automation: version bump, build, DMG creation, notarization, stapling
+- `.env.example` — expanded with notarytool setup instructions
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
