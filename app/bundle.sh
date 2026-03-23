@@ -57,6 +57,7 @@ build_bundle() {
   local app_dir="build/${bundle_name}.app"
   local contents="${app_dir}/Contents"
   local app_metallib="${contents}/MacOS/mlx.metallib"
+  local entitlements_file=""
 
   rm -rf "${app_dir}"
   mkdir -p "${contents}/MacOS"
@@ -94,8 +95,59 @@ build_bundle() {
 </plist>
 PLIST
 
+  # RerunDaemon links Sparkle dynamically once the package product is added,
+  # so every app bundle needs the framework to launch. Only prod gets update metadata.
+  if [[ "$bundle_id" == "com.rerun.app" || "$bundle_id" == "com.rerun.dev" ]]; then
+    local sparkle_fw
+    sparkle_fw=$(find .build/artifacts -path "*/macos-arm64_x86_64/Sparkle.framework" -type d | head -1)
+    if [[ -z "$sparkle_fw" ]]; then
+      echo "Sparkle.framework not found in .build/artifacts" >&2
+      exit 1
+    fi
+
+    if [[ "$bundle_id" == "com.rerun.app" ]]; then
+      # Sparkle metadata stays prod-only until updater wiring lands.
+      /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://usererun.com/appcast.xml" "${contents}/Info.plist"
+      /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string I1gi82QlV84mZZXMzxJyVMFKpDCmcatBYVSGcq1nJgE=" "${contents}/Info.plist"
+    fi
+
+    # Copy framework
+    mkdir -p "${contents}/Frameworks"
+    cp -a "$sparkle_fw" "${contents}/Frameworks/Sparkle.framework"
+
+    # Add rpath so binary finds framework at Contents/Frameworks/
+    install_name_tool -add_rpath @executable_path/../Frameworks "${contents}/MacOS/${bundle_name}"
+
+    # Sign framework internals (inner components first)
+    local fw="${contents}/Frameworks/Sparkle.framework"
+    codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "$fw/Versions/B/XPCServices/Downloader.xpc"
+    codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "$fw/Versions/B/XPCServices/Installer.xpc"
+    codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "$fw/Versions/B/Updater.app"
+    codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "$fw/Versions/B/Autoupdate"
+    codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "$fw/Versions/B/Sparkle"
+    codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "$fw"
+  fi
+
   codesign --force --sign "${CODESIGN_IDENTITY}" "$app_metallib"
-  codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "${app_dir}"
+
+  local -a app_codesign_args=(--force --options runtime --sign "${CODESIGN_IDENTITY}")
+  if [[ "${CODESIGN_IDENTITY}" == "-" ]]; then
+    entitlements_file=$(mktemp)
+    cat > "${entitlements_file}" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
+PLIST
+    app_codesign_args+=(--entitlements "${entitlements_file}")
+  fi
+
+  codesign "${app_codesign_args[@]}" "${app_dir}"
+  [[ -n "${entitlements_file}" ]] && rm -f "${entitlements_file}"
   echo "Built: ${app_dir}"
 }
 
