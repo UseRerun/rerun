@@ -20,17 +20,50 @@ esac
 echo "Building release..."
 swift build -c release
 
+ensure_mlx_metallib() {
+  local cli_metallib=".build/release/mlx.metallib"
+  local mlx_metal_dir=".build/checkouts/mlx-swift/Source/Cmlx/mlx-generated/metal"
+
+  if [[ -f "$cli_metallib" ]]; then
+    return
+  fi
+
+  if [[ ! -d "$mlx_metal_dir" ]]; then
+    echo "Missing MLX Metal sources: $mlx_metal_dir" >&2
+    exit 1
+  fi
+
+  echo "Compiling MLX Metal shaders..."
+  local tmpdir_air
+  tmpdir_air=$(mktemp -d)
+
+  while IFS= read -r -d '' f; do
+    local air="${tmpdir_air}/$(basename "${f%.metal}.air")"
+    xcrun metal -c "$f" -I "$mlx_metal_dir" -o "$air"
+  done < <(find "$mlx_metal_dir" -name "*.metal" -print0)
+
+  find "$tmpdir_air" -name "*.air" -print0 | xargs -0 xcrun metallib -o "$cli_metallib"
+  rm -rf "$tmpdir_air"
+
+  if [[ ! -f "$cli_metallib" ]]; then
+    echo "Failed to build MLX metallib" >&2
+    exit 1
+  fi
+}
+
 build_bundle() {
   local bundle_name="$1"
   local bundle_id="$2"
   local app_dir="build/${bundle_name}.app"
   local contents="${app_dir}/Contents"
+  local app_metallib="${contents}/MacOS/mlx.metallib"
 
   rm -rf "${app_dir}"
   mkdir -p "${contents}/MacOS"
   mkdir -p "${contents}/Resources"
 
   cp .build/release/rerun-daemon "${contents}/MacOS/${bundle_name}"
+  cp .build/release/mlx.metallib "$app_metallib"
 
   cat > "${contents}/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -61,11 +94,13 @@ build_bundle() {
 </plist>
 PLIST
 
-  codesign --force --sign "${CODESIGN_IDENTITY}" "${app_dir}"
+  codesign --force --sign "${CODESIGN_IDENTITY}" "$app_metallib"
+  codesign --force --options runtime --sign "${CODESIGN_IDENTITY}" "${app_dir}"
   echo "Built: ${app_dir}"
 }
 
 mkdir -p build
+ensure_mlx_metallib
 
 if [[ "$VARIANT" == "all" || "$VARIANT" == "prod" ]]; then
   build_bundle "Rerun" "com.rerun.app"

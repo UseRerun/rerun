@@ -55,6 +55,8 @@ Outputs:
 - `app/build/Rerun.app`
 - `app/build/RerunDev.app`
 
+Release bundle builds also compile `mlx.metallib`, embed it in `Contents/MacOS/`, sign the metallib, and sign the app with hardened runtime.
+
 `./dev.sh start` stages the dev app at `/Applications/RerunDev.app`.
 
 `RerunDev.app` launches as profile `dev` automatically from bundle identity. It also has separate macOS TCC permissions from `Rerun.app`, so expect separate Accessibility + Screen Recording grants.
@@ -87,6 +89,16 @@ When changing bundle behavior, also build the bundles:
 cd app
 CODESIGN_IDENTITY=- ./bundle.sh all
 ```
+
+For prod-bundle verification without touching the user's real default-profile data:
+
+```bash
+cd app
+./bundle.sh prod
+./build/Rerun.app/Contents/MacOS/Rerun --profile qa
+```
+
+Trigger chat and confirm a visible response before marking bundle changes done.
 
 Prod-specific checks should be explicit. Avoid killing or reusing the user's installed prod daemon unless the task requires it.
 

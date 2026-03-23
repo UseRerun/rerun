@@ -66,10 +66,10 @@ Enable hardened runtime in bundle.sh so the app can pass Apple notarization.
 Apple requires hardened runtime for notarization. Without it, `xcrun notarytool` will reject the submission. This is a one-line change but must be tested with MLX.
 
 ### Tasks
-- [ ] Add `--options runtime` to the `codesign` call in `app/bundle.sh` (line 64)
-- [ ] Build with `cd app && ./bundle.sh prod`
-- [ ] Run the built app and exercise the chat feature (MLX) to verify hardened runtime doesn't break JIT
-- [ ] If MLX crashes: create `app/Rerun.entitlements` with `com.apple.security.cs.allow-jit` and `com.apple.security.cs.allow-unsigned-executable-memory`, pass `--entitlements` to codesign
+- [x] Add `--options runtime` to the `codesign` call in `app/bundle.sh`
+- [x] Build with `cd app && ./bundle.sh prod`
+- [x] Run the built app on an isolated profile (`./build/Rerun.app/Contents/MacOS/Rerun --profile qa`) and exercise the chat feature
+- [x] Confirm no JIT-related entitlements are needed for MLX chat on the hardened bundle
 
 ### Success Criteria
 - `codesign -dv app/build/Rerun.app` shows `flags=0x10000(runtime)` (hardened runtime)
@@ -77,7 +77,7 @@ Apple requires hardened runtime for notarization. Without it, `xcrun notarytool`
 
 ### Files Likely Affected
 - `app/bundle.sh`
-- `app/Rerun.entitlements` (new, only if needed)
+- `app/Rerun.entitlements` (not needed after verification)
 
 ---
 
@@ -87,16 +87,19 @@ Apple requires hardened runtime for notarization. Without it, `xcrun notarytool`
 Add MLX Metal shader compilation to bundle.sh so release builds have GPU acceleration.
 
 ### Rationale
-Currently only `dev.sh` compiles the metallib. Without it, release builds fall back to CPU for MLX inference, which is unacceptably slow.
+Currently only `dev.sh` compiles the metallib. Without it, release builds fail to load MLX's default metallib and the app can die on startup before chat works.
 
 ### Tasks
-- [ ] Copy the metallib compilation logic from `app/dev.sh` (lines 34-48) into `bundle.sh`'s `build_bundle()` function, after the binary copy
-- [ ] Adapt paths for release configuration (`.build/release/` instead of `.build/debug/`)
-- [ ] Build with `./bundle.sh prod` and verify `mlx.metallib` exists in `Contents/MacOS/`
+- [x] Add metallib compilation logic to `bundle.sh` for release builds
+- [x] Adapt paths for release configuration (`.build/release/` instead of `.build/debug/`)
+- [x] Copy `mlx.metallib` into `Contents/MacOS/`
+- [x] Sign `mlx.metallib` before signing the app bundle
+- [x] Build with `./bundle.sh prod` and verify `mlx.metallib` exists in `Contents/MacOS/`
+- [x] Launch the built app and verify the previous `MLX error: Failed to load the default metallib` crash is gone
 
 ### Success Criteria
 - `ls app/build/Rerun.app/Contents/MacOS/mlx.metallib` succeeds
-- Chat feature uses GPU (not dramatically slower than dev build)
+- Built app launches and MLX chat works with the bundled metallib present
 
 ### Files Likely Affected
 - `app/bundle.sh`
