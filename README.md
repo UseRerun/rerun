@@ -137,6 +137,8 @@ Outputs:
 - `app/build/Rerun.app`
 - `app/build/RerunDev.app`
 
+Release bundle builds also compile `mlx.metallib`, embed it in `Contents/MacOS/`, sign the metallib, and sign the app with hardened runtime.
+
 Install both:
 
 ```bash
@@ -145,6 +147,16 @@ cp -R app/build/RerunDev.app /Applications/
 ```
 
 `RerunDev.app` defaults to the `dev` profile automatically when launched from Finder or `open`.
+
+For prod-bundle verification without touching your real default-profile data:
+
+```bash
+cd app
+./bundle.sh prod
+./build/Rerun.app/Contents/MacOS/Rerun --profile qa
+```
+
+Then trigger chat and confirm a visible response before treating bundle changes as done.
 
 ## Launch Target Selection
 

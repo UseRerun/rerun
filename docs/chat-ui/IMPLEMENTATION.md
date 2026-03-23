@@ -314,4 +314,4 @@ The difference between "it works" and "I want to use this" is polish. A floating
 - The chat UI does NOT replace the CLI. The CLI remains the primary interface for agents and power users. The chat is for humans who want conversational access.
 - No new SPM target or dependency needed. SwiftUI + Foundation Models are system frameworks.
 - Profile isolation (dev/prod) works automatically — the daemon already resolves the profile at startup and passes the correct `DatabaseManager`.
-- Bundle builds (`bundle.sh`) need no changes — the chat UI is compiled into the existing daemon binary.
+- Chat UI still ships in the existing daemon binary, but release bundle builds now also need `bundle.sh` to compile/embed/sign `mlx.metallib` so MLX-backed chat works in `.app` builds.

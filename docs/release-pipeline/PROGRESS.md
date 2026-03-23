@@ -1,6 +1,6 @@
 # Release Pipeline Progress
 
-## Status: Phase 1 — Completed
+## Status: Phase 3 — Completed
 
 ## Quick Reference
 - Research: `docs/release-pipeline/RESEARCH.md`
@@ -28,13 +28,16 @@
 ---
 
 ### Phase 2: Hardened Runtime
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added `--options runtime` to `codesign` call in `app/bundle.sh`
+- Built with `./bundle.sh prod` — confirmed `codesign -dv app/build/Rerun.app` shows `flags=0x10000(runtime)` with Developer ID signing
+- Launched the hardened app bundle directly with `./build/Rerun.app/Contents/MacOS/Rerun --profile qa`
+- Opened chat via the global hotkey and verified a visible chat response with OCR from the QA app window
 
 #### Decisions Made
-- (none yet)
+- No entitlements file needed — verified MLX chat works under hardened runtime without JIT-related entitlements
 
 #### Blockers
 - (none)
@@ -42,13 +45,17 @@
 ---
 
 ### Phase 3: Metallib in Release Builds
-**Status:** Not Started
+**Status:** Completed
 
 #### Tasks Completed
-- (none yet)
+- Added release metallib compilation to `app/bundle.sh`
+- Copied `mlx.metallib` into `Rerun.app/Contents/MacOS/`
+- Signed `mlx.metallib` before signing the app bundle
+- Verified the pre-fix startup crash (`MLX error: Failed to load the default metallib`) is gone
+- Verified `app/build/Rerun.app/Contents/MacOS/mlx.metallib` exists in the final bundle
 
 #### Decisions Made
-- (none yet)
+- Fail the release build if MLX Metal sources or the compiled metallib are missing — release bundles must include MLX support, no fallback path
 
 #### Blockers
 - (none)
@@ -174,12 +181,15 @@
 - Completed implementation planning — `docs/release-pipeline/IMPLEMENTATION.md`
 - Set up progress tracking
 - **Phase 1 completed:** `.env.example` and `CHANGELOG.md` created
+- **Phase 2 completed:** Hardened runtime verified on a Developer ID-signed local bundle; app launched and chat returned a visible response without extra entitlements
+- **Phase 3 completed:** `bundle.sh` now compiles, embeds, and signs `mlx.metallib` for release bundles
 
 ---
 
 ## Files Changed
 - `.env.example` (new) — credential template with placeholders
 - `CHANGELOG.md` (new) — Keep a Changelog format
+- `app/bundle.sh` — added hardened runtime plus MLX metallib compile/embed/sign steps for release bundles
 
 ## Architectural Decisions
 (Major technical decisions and rationale)
