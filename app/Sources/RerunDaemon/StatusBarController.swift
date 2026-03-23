@@ -1,5 +1,6 @@
 import AppKit
 import RerunCore
+import Sparkle
 
 @MainActor
 final class StatusBarController: NSObject, NSMenuDelegate {
@@ -8,6 +9,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private var statsTimer: Timer?
     private var chatPanel: ChatPanel?
     private var modelManager: ModelManager?
+    private var updaterController: SPUStandardUpdaterController?
     private let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
         ?? Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String
         ?? ProcessInfo.processInfo.processName
@@ -85,6 +87,15 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             }
         }
 
+        if let updaterController {
+            let updateItem = NSMenuItem(
+                title: "Check for Updates\u{2026}",
+                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                keyEquivalent: "")
+            updateItem.target = updaterController
+            menu.addItem(updateItem)
+        }
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit \(appName)", action: #selector(quitApp), keyEquivalent: "q")
@@ -125,6 +136,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     func setModelManager(_ manager: ModelManager) {
         self.modelManager = manager
+    }
+
+    func setUpdaterController(_ controller: SPUStandardUpdaterController) {
+        self.updaterController = controller
     }
 
     @objc private func toggleChat() {

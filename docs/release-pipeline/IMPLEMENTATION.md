@@ -244,17 +244,17 @@ Initialize the Sparkle updater in the daemon and add a "Check for Updates" menu 
 With the framework embedded (Phase 7), we can now use it. The updater auto-checks for updates periodically, and the menu item lets users check manually.
 
 ### Tasks
-- [ ] In `app/Sources/RerunDaemon/main.swift`, add `import Sparkle`
-- [ ] Inside the `if appVariant == .production` block, create the updater controller:
+- [x] In `app/Sources/RerunDaemon/main.swift`, add `import Sparkle`
+- [x] Inside the `if appVariant == .production` block, create the updater controller:
   ```swift
   let updaterController = SPUStandardUpdaterController(
       startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
   ```
-- [ ] Add `updaterController` property to `StatusBarController`
-- [ ] Add setter method: `func setUpdaterController(_ controller: SPUStandardUpdaterController)`
-- [ ] In `buildMenu()`, add "Check for Updates…" menu item before the Quit item, targeting the updater's `checkForUpdates(_:)` action
-- [ ] Wire up in `main.swift`: `statusBar.setUpdaterController(updaterController)`
-- [ ] Build and test: menu item appears, clicking it doesn't crash (will show "no updates" since no appcast exists yet)
+- [x] Add `updaterController` property to `StatusBarController`
+- [x] Add setter method: `func setUpdaterController(_ controller: SPUStandardUpdaterController)`
+- [x] In `buildMenu()`, add "Check for Updates…" menu item before the Quit item, targeting the updater's `checkForUpdates(_:)` action
+- [x] Wire up in `main.swift`: `statusBar.setUpdaterController(updaterController)`
+- [x] Build and test: menu item appears, clicking it doesn't crash (will show "no updates" since no appcast exists yet)
 
 ### Success Criteria
 - "Check for Updates…" appears in the status bar menu (production build only)
