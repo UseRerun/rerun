@@ -3,6 +3,20 @@
   <channel>
     <title>Rerun</title>
     <item>
+      <title>Version 0.2.0</title>
+      <sparkle:version>0.2.0</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 23 Mar 2026 18:09:32 +0000</pubDate>
+      <description><![CDATA[<ul><li>Onboarding setup checklist shown on launch when permissions are missing (Accessibility, Screen Recording, App Management) or the AI model isn't downloaded</li><li>Keyboard shortcut (⌘⇧⌥Space) displayed in the menu bar Chat item</li></ul>]]></description>
+      <enclosure
+        url="https://github.com/usererun/rerun/releases/download/v0.2.0/Rerun.dmg"
+        sparkle:edSignature="aolcJaTesYL0VtHpoyzcyHFISKMEr4zPA52Ud79DMV4UBvSfoONWvmQuriAalFJKhNBlIc1VlgSmOVA+TBWzDg=="
+        length="16023368"
+        type="application/octet-stream"
+      />
+    </item>
+    <item>
       <title>Version 0.1.1</title>
       <sparkle:version>0.1.1</sparkle:version>
       <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
