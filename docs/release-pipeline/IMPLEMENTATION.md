@@ -150,15 +150,20 @@ Without notarization, macOS Gatekeeper will show a scary "unidentified developer
 ### Tasks
 - [x] Add notarytool keychain profile validation at script start: `xcrun notarytool history --keychain-profile "AC_PASSWORD"`
 - [x] Add clean working tree check: `git status --porcelain` must be empty
-- [x] After DMG creation: `xcrun notarytool submit app/build/Rerun.dmg --keychain-profile "AC_PASSWORD" --wait`
+- [x] Archive the built app for notarization: `ditto -c -k --keepParent app/build/Rerun.app app/build/Rerun-notarization.zip`
+- [x] Submit the app archive first: `xcrun notarytool submit app/build/Rerun-notarization.zip --keychain-profile "AC_PASSWORD" --wait`
 - [x] Staple the app: `xcrun stapler staple app/build/Rerun.app`
-- [x] Re-create DMG with stapled app (same hdiutil command)
+- [x] Create the final DMG from the stapled app (same hdiutil command)
+- [x] Sign the final DMG: `codesign --force --sign "$SIGNING_IDENTITY" app/build/Rerun.dmg`
+- [x] Submit the final DMG: `xcrun notarytool submit app/build/Rerun.dmg --keychain-profile "AC_PASSWORD" --wait`
 - [x] Staple the DMG: `xcrun stapler staple app/build/Rerun.dmg` (may fail due to CDN delay — non-fatal)
 - [x] Document one-time notarytool setup in `.env.example` comments
 
 ### Success Criteria
-- `xcrun notarytool submit` succeeds (status: Accepted)
+- App archive notarization succeeds (status: Accepted)
 - `xcrun stapler validate app/build/Rerun.app` passes
+- `codesign -dv app/build/Rerun.dmg` shows a valid Developer ID signature
+- Final DMG notarization succeeds (status: Accepted)
 - DMG can be opened on a fresh Mac without Gatekeeper warnings
 
 ### Files Likely Affected

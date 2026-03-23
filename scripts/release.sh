@@ -79,6 +79,20 @@ done
 
 SIGNING_IDENTITY="Developer ID Application: ${SIGNING_IDENTITY_NAME} (${APPLE_TEAM_ID})"
 
+create_dmg() {
+  local app_path="$1"
+  local dmg_path="$2"
+  local dmg_staging
+
+  dmg_staging=$(mktemp -d)
+  cp -R "$app_path" "${dmg_staging}/"
+  ln -s /Applications "${dmg_staging}/Applications"
+
+  rm -f "$dmg_path"
+  hdiutil create -srcfolder "$dmg_staging" -volname "Rerun" -format UDZO "$dmg_path"
+  rm -rf "$dmg_staging"
+}
+
 # --- Pre-flight checks ---
 
 if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
@@ -120,6 +134,7 @@ VERSION="$VERSION" CODESIGN_IDENTITY="$SIGNING_IDENTITY" ./bundle.sh prod
 # --- DMG creation ---
 
 APP_PATH="${REPO_ROOT}/app/build/Rerun.app"
+APP_ZIP_PATH="${REPO_ROOT}/app/build/Rerun-notarization.zip"
 DMG_PATH="${REPO_ROOT}/app/build/Rerun.dmg"
 
 if [[ ! -d "$APP_PATH" ]]; then
@@ -127,34 +142,28 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-echo "Creating DMG..."
-DMG_STAGING=$(mktemp -d)
-cp -R "$APP_PATH" "${DMG_STAGING}/"
-ln -s /Applications "${DMG_STAGING}/Applications"
+echo "Creating app archive for notarization..."
+rm -f "$APP_ZIP_PATH"
+ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP_PATH"
 
-rm -f "$DMG_PATH"
-hdiutil create -srcfolder "$DMG_STAGING" -volname "Rerun" -format UDZO "$DMG_PATH"
-rm -rf "$DMG_STAGING"
-
-# --- Notarize ---
-
-echo "Notarizing..."
-xcrun notarytool submit "$DMG_PATH" --keychain-profile "AC_PASSWORD" --wait
-
-# --- Staple ---
+echo "Notarizing app archive..."
+xcrun notarytool submit "$APP_ZIP_PATH" --keychain-profile "AC_PASSWORD" --wait
 
 echo "Stapling app..."
 xcrun stapler staple "$APP_PATH"
 
-echo "Re-creating DMG with stapled app..."
-rm -f "$DMG_PATH"
-DMG_STAGING=$(mktemp -d)
-cp -R "$APP_PATH" "${DMG_STAGING}/"
-ln -s /Applications "${DMG_STAGING}/Applications"
-hdiutil create -srcfolder "$DMG_STAGING" -volname "Rerun" -format UDZO "$DMG_PATH"
-rm -rf "$DMG_STAGING"
+echo "Creating DMG..."
+create_dmg "$APP_PATH" "$DMG_PATH"
 
+echo "Signing DMG..."
+codesign --force --sign "$SIGNING_IDENTITY" "$DMG_PATH"
+
+echo "Notarizing DMG..."
+xcrun notarytool submit "$DMG_PATH" --keychain-profile "AC_PASSWORD" --wait
+
+echo "Stapling DMG..."
 xcrun stapler staple "$DMG_PATH" || echo "Warning: DMG staple failed (normal — CDN propagation delay). App inside is stapled."
+rm -f "$APP_ZIP_PATH"
 
 echo ""
 echo "Release built and notarized successfully:"
