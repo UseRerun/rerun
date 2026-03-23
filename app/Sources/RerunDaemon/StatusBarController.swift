@@ -18,7 +18,14 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         self.daemon = daemon
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "eye.circle", accessibilityDescription: appName)
+        if let url = Bundle.main.url(forResource: "MenuBarIcon@2x", withExtension: "png"),
+           let icon = NSImage(contentsOf: url) {
+            icon.size = NSSize(width: 18, height: 18)
+            icon.isTemplate = true
+            item.button?.image = icon
+        } else {
+            item.button?.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: appName)
+        }
         item.button?.toolTip = appName
         let menu = buildMenu()
         menu.delegate = self

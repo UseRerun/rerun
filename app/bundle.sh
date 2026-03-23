@@ -66,6 +66,17 @@ build_bundle() {
   cp .build/release/rerun-daemon "${contents}/MacOS/${bundle_name}"
   cp .build/release/mlx.metallib "$app_metallib"
 
+  # Copy app icon
+  local icon_name
+  if [[ "$bundle_id" == "com.rerun.app" ]]; then
+    icon_name="AppIcon"
+  else
+    icon_name="AppIconDev"
+  fi
+  cp "resources/${icon_name}.icns" "${contents}/Resources/${icon_name}.icns"
+  cp resources/MenuBarIcon.png "${contents}/Resources/MenuBarIcon.png"
+  cp "resources/MenuBarIcon@2x.png" "${contents}/Resources/MenuBarIcon@2x.png"
+
   cat > "${contents}/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -79,6 +90,8 @@ build_bundle() {
     <string>${bundle_name}</string>
     <key>CFBundleExecutable</key>
     <string>${bundle_name}</string>
+    <key>CFBundleIconFile</key>
+    <string>${icon_name}</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
