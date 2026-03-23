@@ -10,17 +10,24 @@ final class ChatViewModel {
     var inputText: String = ""
     var isProcessing: Bool = false
     var isStreaming: Bool = false
+    var modelState: ModelManager.ModelState = .idle
     private var responseTask: Task<Void, Never>?
     private var activeRequestID: UUID?
     private let responseProvider: (@Sendable (String) async -> ChatStreamResponse)?
 
-    init(chatEngine: ChatEngine? = nil) {
+    init(chatEngine: ChatEngine? = nil, modelManager: ModelManager? = nil) {
         if let chatEngine {
             self.responseProvider = { text in
                 await chatEngine.processStreaming(text)
             }
         } else {
             self.responseProvider = nil
+        }
+        if let modelManager {
+            self.modelState = modelManager.state
+            modelManager.onStateChange = { [weak self] state in
+                self?.modelState = state
+            }
         }
     }
 

@@ -172,8 +172,7 @@ struct AskCommand: AsyncParsableCommand {
     private func printSynthesis(context: String) async {
         print("── Answer ──")
 
-        let modelsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Rerun/models")
+        let modelsDir = RerunHome.appSupportURL().appendingPathComponent("models")
         let modelId = "mlx-community/phi-4-4bit"
 
         do {

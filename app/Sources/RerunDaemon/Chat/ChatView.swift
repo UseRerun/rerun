@@ -86,13 +86,32 @@ struct ChatView: View {
         }
     }
 
+    private var modelReady: Bool {
+        if case .ready = viewModel.modelState { return true }
+        return false
+    }
+
+    private var inputPlaceholder: String {
+        switch viewModel.modelState {
+        case .idle:
+            return "Preparing AI model\u{2026}"
+        case .downloading(let progress):
+            let pct = Int(progress * 100)
+            return "Downloading AI model\u{2026} \(pct)%"
+        case .ready:
+            return "Ask anything..."
+        case .failed:
+            return "AI model download failed"
+        }
+    }
+
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField("Ask anything...", text: $viewModel.inputText)
+            TextField(inputPlaceholder, text: $viewModel.inputText)
                 .textFieldStyle(.plain)
                 .focused($isInputFocused)
                 .onSubmit { viewModel.send() }
-                .disabled(viewModel.isProcessing || viewModel.isStreaming)
+                .disabled(!modelReady || viewModel.isProcessing || viewModel.isStreaming)
 
             if viewModel.isProcessing || viewModel.isStreaming {
                 ProgressView()

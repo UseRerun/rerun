@@ -3,6 +3,7 @@ import MLXLLM
 import MLXLMCommon
 import Hub
 import os
+import RerunCore
 
 private let logger = Logger(subsystem: "com.rerun", category: "ModelManager")
 
@@ -19,15 +20,19 @@ actor ModelManager {
     }
 
     /// Observable state for UI (menu bar, chat). MainActor-isolated so SwiftUI/AppKit can read directly.
-    @MainActor private(set) var state: ModelState = .idle
+    @MainActor private(set) var state: ModelState = .idle {
+        didSet { onStateChange?(state) }
+    }
+
+    /// Callback fired on MainActor whenever state changes. Used by ChatViewModel for reactive updates.
+    @MainActor var onStateChange: ((ModelState) -> Void)?
 
     private let modelId = "mlx-community/phi-4-4bit"
     private var container: ModelContainer?
     private var isLoading = false
 
     private var modelsDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Rerun/models")
+        RerunHome.appSupportURL().appendingPathComponent("models")
     }
 
     /// Kick off model download in background. Safe to call multiple times.
