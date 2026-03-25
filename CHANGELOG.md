@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-25
+
+### Changed
+
+- Finder is now excluded from captures by default (existing databases are backfilled automatically)
+- Accessibility capture filters out sidebar and navigation text in split-view apps like Messages and Mail
+
 ## [0.2.1] - 2026-03-24
 
 ### Added
