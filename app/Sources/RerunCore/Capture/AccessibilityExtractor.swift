@@ -65,12 +65,19 @@ public final class AccessibilityExtractor: @unchecked Sendable {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
         var textParts = Set<String>()
 
-        // Walk both focused element subtree and focused window subtree
-        if let focused = copyElement(from: appElement, attribute: kAXFocusedUIElementAttribute) {
+        let focused = copyElement(from: appElement, attribute: kAXFocusedUIElementAttribute)
+
+        // Walk focused element subtree (already scoped, no split-group filtering needed)
+        if let focused {
             collectText(from: focused, depth: 0, deadline: deadline, into: &textParts)
         }
+
+        // Walk window subtree with focus-aware split-group filtering
+        // For apps with sidebars (Messages, Mail, Finder), this extracts only the
+        // pane containing the focused element, skipping sidebar/navigation text.
         if let window = windowElement {
-            collectText(from: window, depth: 0, deadline: deadline, into: &textParts)
+            let ancestors = focused.map { ancestorChain(from: $0) }
+            collectText(from: window, depth: 0, deadline: deadline, into: &textParts, focusAncestors: ancestors)
         }
 
         let text = textParts
@@ -94,7 +101,7 @@ public final class AccessibilityExtractor: @unchecked Sendable {
 
     // MARK: - Tree Walking
 
-    private func collectText(from element: AXUIElement, depth: Int, deadline: Date, into output: inout Set<String>) {
+    private func collectText(from element: AXUIElement, depth: Int, deadline: Date, into output: inout Set<String>, focusAncestors: [AXUIElement]? = nil) {
         guard depth <= maxDepth, Date() < deadline else { return }
 
         // Batch-fetch text attributes for efficiency (one IPC call instead of four)
@@ -111,13 +118,40 @@ public final class AccessibilityExtractor: @unchecked Sendable {
             }
         }
 
+        // For split views, only recurse into the pane containing the focused element.
+        // This filters out sidebar/navigation text in apps like Messages, Mail, Finder.
+        if let ancestors = focusAncestors {
+            let role = copyValue(from: element, attribute: kAXRoleAttribute) as? String
+            let subrole = copyValue(from: element, attribute: kAXSubroleAttribute) as? String
+
+            // Determine split panes: native NSSplitView or Catalyst iOSContentGroup
+            var panes: [AXUIElement]?
+            if role == "AXSplitGroup" {
+                panes = copyChildren(from: element, attribute: kAXChildrenAttribute)
+            } else if subrole == "iOSContentGroup" {
+                // Catalyst apps: panes are grandchildren (children of the layout container)
+                let directChildren = copyChildren(from: element, attribute: kAXChildrenAttribute)
+                if let layoutContainer = directChildren.first {
+                    panes = copyChildren(from: layoutContainer, attribute: kAXChildrenAttribute)
+                }
+            }
+
+            if let panes {
+                if let focusedPane = panes.first(where: { child in ancestors.contains { CFEqual(child, $0) } }) {
+                    collectText(from: focusedPane, depth: depth + 1, deadline: deadline, into: &output, focusAncestors: ancestors)
+                    return
+                }
+                // Focus not in any pane (toolbar, etc.) — fall through to full walk
+            }
+        }
+
         // Recurse into children — prefer visible children first
         for childAttr in [kAXVisibleChildrenAttribute, kAXChildrenAttribute] {
             let children = copyChildren(from: element, attribute: childAttr)
             for (i, child) in children.enumerated() {
                 if i >= maxChildrenPerNode { break }
                 if Date() >= deadline { return }
-                collectText(from: child, depth: depth + 1, deadline: deadline, into: &output)
+                collectText(from: child, depth: depth + 1, deadline: deadline, into: &output, focusAncestors: focusAncestors)
             }
         }
     }
@@ -204,6 +238,21 @@ public final class AccessibilityExtractor: @unchecked Sendable {
             }
         }
         return nil
+    }
+
+    // MARK: - Focus Ancestry
+
+    /// Build the ancestor chain from an element up to the root via kAXParentAttribute.
+    /// Used to determine which split-group pane contains the focused element.
+    private func ancestorChain(from element: AXUIElement, limit: Int = 20) -> [AXUIElement] {
+        var ancestors = [AXUIElement]()
+        var current: AXUIElement? = element
+        for _ in 0..<limit {
+            guard let el = current else { break }
+            ancestors.append(el)
+            current = copyElement(from: el, attribute: kAXParentAttribute)
+        }
+        return ancestors
     }
 
     // MARK: - AX Helpers
