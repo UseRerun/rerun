@@ -24,6 +24,7 @@ public struct EmbeddingGenerator: Sendable {
         }
 
         let dim = model.dimension
+        guard dim == 512 else { return nil }
         let chunks = chunkText(text, maxChars: 1000)
         var allEmbeddings: [[Float]] = []
 

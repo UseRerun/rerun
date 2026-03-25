@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.rerun", category: "HybridSearch")
 
 public struct HybridSearch: Sendable {
 
@@ -76,8 +79,14 @@ public struct HybridSearch: Sendable {
     ) async throws -> [ScoredResult] {
         let queryEmbedding = embedder.embed(query)
 
-        // Keyword results
-        let keywordResults = try await keywordMatches(query: query, app: app, since: since, limit: limit, db: db)
+        // Keyword results — degrade gracefully if FTS/DB fails
+        let keywordResults: [(capture: Capture, rank: Float)]
+        do {
+            keywordResults = try await keywordMatches(query: query, app: app, since: since, limit: limit, db: db)
+        } catch {
+            logger.error("Keyword search failed: \(String(describing: error))")
+            keywordResults = []
+        }
 
         // If no embeddings available, keyword-only
         guard let embedding = queryEmbedding else {
@@ -86,8 +95,16 @@ public struct HybridSearch: Sendable {
             }
         }
 
-        // Vector results
-        let vectorResults = try await db.findSimilarWithDistance(to: embedding, app: app, since: since, limit: limit)
+        // Vector results — degrade to keyword-only if vec search fails
+        let vectorResults: [(capture: Capture, distance: Float)]
+        do {
+            vectorResults = try await db.findSimilarWithDistance(to: embedding, app: app, since: since, limit: limit)
+        } catch {
+            logger.error("Vector search failed, using keyword results only: \(String(describing: error))")
+            return keywordResults.map { item in
+                ScoredResult(capture: item.capture, score: HybridSearch.normalizeRank(item.rank), source: .keyword)
+            }
+        }
 
         // Merge with dedup
         return merge(keyword: keywordResults, vector: vectorResults, limit: limit)
