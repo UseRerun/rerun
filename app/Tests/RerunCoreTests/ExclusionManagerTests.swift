@@ -20,7 +20,7 @@ struct ExclusionManagerTests {
     @Test func doesNotReseedIfExclusionsExist() async throws {
         let db = try makeDB()
 
-        // Insert one exclusion manually
+        // Insert one custom exclusion manually
         let exclusion = Exclusion(type: "app", value: "com.custom.app")
         try await db.insertExclusion(exclusion)
 
@@ -165,6 +165,22 @@ struct ExclusionManagerTests {
 
         let after = await manager.shouldExcludeApp(bundleId: "com.1password.1password")
         #expect(after == false)
+    }
+
+    @Test func removedDefaultStaysRemovedAfterReload() async throws {
+        let db = try makeDB()
+        let manager = ExclusionManager(db: db)
+        try await manager.loadExclusions()
+
+        try await manager.removeExclusion(type: "app", value: "com.apple.finder")
+        #expect(try await db.exclusionExists(type: "app", value: "com.apple.finder") == false)
+
+        try await manager.loadExclusions()
+
+        let stillRemoved = try await db.exclusionExists(type: "app", value: "com.apple.finder")
+        #expect(stillRemoved == false)
+        let allowsFinder = await manager.shouldExcludeApp(bundleId: "com.apple.finder")
+        #expect(allowsFinder == false)
     }
 
     @Test func refreshPicksUpExternalDatabaseChanges() async throws {

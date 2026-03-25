@@ -15,6 +15,7 @@ public enum DefaultExclusions {
         ("com.rerun.daemon", "Rerun"),
         ("com.rerun.app", "Rerun"),
         ("com.rerun.dev", "RerunDev"),
+        ("com.apple.finder", "Finder"),
     ]
 
     static let safariPrivateBrowsingBundleIds: Set<String> = [

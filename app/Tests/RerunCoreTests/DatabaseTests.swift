@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import GRDB
 @testable import RerunCore
 
 @Suite("DatabaseManager")
@@ -182,6 +183,29 @@ struct DatabaseTests {
         let deleted = try await db.deleteExclusion(id: exclusion.id)
         #expect(deleted)
         #expect(try await db.fetchExclusions().isEmpty)
+    }
+
+    @Test func finderDefaultMigrationBackfillsExistingDatabases() async throws {
+        let path = NSTemporaryDirectory() + "rerun-test-\(UUID().uuidString).db"
+        _ = try DatabaseManager(path: path)
+
+        let legacyExclusion = Exclusion(type: "app", value: "com.custom.legacy")
+        let queue = try DatabaseQueue(path: path)
+        try await queue.write { db in
+            try legacyExclusion.insert(db)
+            try db.execute(
+                sql: "DELETE FROM exclusion WHERE type = ? AND value = ?",
+                arguments: ["app", "com.apple.finder"]
+            )
+            try db.execute(
+                sql: "DELETE FROM grdb_migrations WHERE identifier = ?",
+                arguments: ["v2-add-finder-default-exclusion"]
+            )
+        }
+
+        let migrated = try DatabaseManager(path: path)
+        #expect(try await migrated.exclusionExists(type: "app", value: "com.apple.finder"))
+        #expect(try await migrated.exclusionExists(type: "app", value: legacyExclusion.value))
     }
 
     @Test func summaryCRUD() async throws {
