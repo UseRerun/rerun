@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-24
+
+### Added
+
+- "Open Rerun Folder" menu bar item to quickly access the data directory in Finder
+
 ## [0.2.0] - 2026-03-23
 
 ### Added

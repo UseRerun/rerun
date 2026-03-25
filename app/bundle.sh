@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 VARIANT="${1:-all}"
-VERSION="${VERSION:-0.2.0}"
+VERSION="${VERSION:-0.2.1}"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Sabotage Media, LLC (W33JZPPPFN)}"
 
 case "$VARIANT" in
