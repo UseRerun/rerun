@@ -1,4 +1,5 @@
 import AppKit
+import os
 import RerunCore
 import Sparkle
 
@@ -10,6 +11,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private var chatPanel: ChatPanel?
     private var modelManager: ModelManager?
     private var updaterController: SPUStandardUpdaterController?
+    private let logger = Logger(subsystem: "com.rerun", category: "StatusBarController")
     private let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
         ?? Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String
         ?? ProcessInfo.processInfo.processName
@@ -97,6 +99,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             }
         }
 
+        let openFolderItem = NSMenuItem(title: "Open Rerun Folder", action: #selector(openRerunFolder), keyEquivalent: "")
+        openFolderItem.target = self
+        menu.addItem(openFolderItem)
+
         if let updaterController {
             let updateItem = NSMenuItem(
                 title: "Check for Updates\u{2026}",
@@ -158,6 +164,23 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func retryModelDownload() {
         Task { await modelManager?.retry() }
+    }
+
+    @objc private func openRerunFolder() {
+        do {
+            let url = try Self.rerunFolderURL()
+            guard NSWorkspace.shared.open(url) else {
+                logger.error("Failed to open Rerun folder at \(url.path, privacy: .public)")
+                return
+            }
+        } catch {
+            logger.error("Failed to prepare Rerun folder: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    nonisolated static func rerunFolderURL(baseURL: URL = RerunHome.baseURL(), fileManager: FileManager = .default) throws -> URL {
+        try fileManager.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        return baseURL
     }
 
     @objc private func quitApp() {
