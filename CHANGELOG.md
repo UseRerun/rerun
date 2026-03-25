@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-25
+
+### Fixed
+
+- Search pipeline failures are now isolated so keyword and vector search degrade independently
+
 ## [0.2.2] - 2026-03-25
 
 ### Changed
