@@ -3,6 +3,20 @@
   <channel>
     <title>Rerun</title>
     <item>
+      <title>Version 0.2.2</title>
+      <sparkle:version>0.2.2</sparkle:version>
+      <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Wed, 25 Mar 2026 12:20:08 +0000</pubDate>
+      <description><![CDATA[<ul><li>Finder is now excluded from captures by default (existing databases are backfilled automatically)</li><li>Accessibility capture filters out sidebar and navigation text in split-view apps like Messages and Mail</li></ul>]]></description>
+      <enclosure
+        url="https://github.com/usererun/rerun/releases/download/v0.2.2/Rerun.dmg"
+        sparkle:edSignature="bMg/lqWKfGwqxhGGSQkdxS0IPcdQsfmTm+tIUBEFfDMKDA81EEDkuFOGOL+PvW3chb7Tx8I7oiIrp8h1CtsfCg=="
+        length="16026301"
+        type="application/octet-stream"
+      />
+    </item>
+    <item>
       <title>Version 0.2.1</title>
       <sparkle:version>0.2.1</sparkle:version>
       <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
