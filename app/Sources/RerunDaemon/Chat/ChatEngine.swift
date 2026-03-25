@@ -75,7 +75,7 @@ actor ChatEngine {
         do {
             response = try await service.search(SearchRequest(query: message, limit: 30))
         } catch {
-            logger.error("Search failed: \(error.localizedDescription)")
+            logger.error("Search failed: \(String(describing: error))")
             return ChatEngineResponse(
                 content: "Something went wrong searching your captures.",
                 sources: [],
@@ -105,7 +105,7 @@ actor ChatEngine {
                 parsedQuery: parsed
             ))
         } catch {
-            logger.error("Search failed: \(error.localizedDescription)")
+            logger.error("Search failed: \(String(describing: error))")
             return ChatEngineResponse(
                 content: "Something went wrong searching your captures.",
                 sources: [],
@@ -131,7 +131,7 @@ actor ChatEngine {
         do {
             response = try await service.search(SearchRequest(query: message, limit: 10))
         } catch {
-            logger.error("Search failed: \(error.localizedDescription)")
+            logger.error("Search failed: \(String(describing: error))")
             return ChatStreamResponse(
                 sources: [],
                 summaryDebug: nil,
