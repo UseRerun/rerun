@@ -77,7 +77,7 @@ public actor ExclusionManager {
         let exclusion = Exclusion(type: type, value: value)
         try await db.insertExclusion(exclusion)
         try await rebuildCache()
-        logger.info("Added exclusion: \(type) = \(value)")
+        logger.notice("Added exclusion: \(type) = \(value)")
     }
 
     /// Remove an exclusion by type and value. Updates cache immediately.
@@ -88,7 +88,7 @@ public actor ExclusionManager {
         }
         _ = try await db.deleteExclusion(id: match.id)
         try await rebuildCache()
-        logger.info("Removed exclusion: \(type) = \(value)")
+        logger.notice("Removed exclusion: \(type) = \(value)")
     }
 
     /// Refresh cache from DB so external writers (CLI, tests) take effect.
@@ -103,7 +103,7 @@ public actor ExclusionManager {
             let exclusion = Exclusion(type: "app", value: app.bundleId)
             try await db.insertExclusion(exclusion)
         }
-        logger.info("Seeded \(DefaultExclusions.apps.count) default exclusions")
+        logger.notice("Seeded \(DefaultExclusions.apps.count) default exclusions")
     }
 
     private func rebuildCache() async throws {

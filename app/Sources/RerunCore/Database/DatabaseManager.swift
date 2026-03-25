@@ -136,6 +136,34 @@ public actor DatabaseManager {
                 """)
         }
 
+        migrator.registerMigration("v2-add-finder-default-exclusion") { db in
+            let createdAt = ISO8601DateFormatter().string(from: Date())
+            try db.execute(
+                sql: """
+                    INSERT INTO exclusion (id, type, value, createdAt)
+                    SELECT ?, ?, ?, ?
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM exclusion
+                        WHERE type = ? AND value = ?
+                    )
+                    AND (
+                        EXISTS (SELECT 1 FROM exclusion)
+                        OR EXISTS (SELECT 1 FROM capture)
+                        OR EXISTS (SELECT 1 FROM summary)
+                    )
+                    """,
+                arguments: [
+                    UUID().uuidString,
+                    "app",
+                    "com.apple.finder",
+                    createdAt,
+                    "app",
+                    "com.apple.finder",
+                ]
+            )
+        }
+
         return migrator
     }
 
