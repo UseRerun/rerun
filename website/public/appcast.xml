@@ -3,6 +3,20 @@
   <channel>
     <title>Rerun</title>
     <item>
+      <title>Version 0.2.3</title>
+      <sparkle:version>0.2.3</sparkle:version>
+      <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Wed, 25 Mar 2026 19:45:29 +0000</pubDate>
+      <description><![CDATA[<ul><li>Search pipeline failures are now isolated so keyword and vector search degrade independently</li></ul>]]></description>
+      <enclosure
+        url="https://github.com/usererun/rerun/releases/download/v0.2.3/Rerun.dmg"
+        sparkle:edSignature="8BoN1Zw/TngKVZ4ASXEUt1UXMiC9HX6SQpsaZSv/QrOSVgNOdCKPfa1cY4katN5mkD6Ic1f2IPA53V7oQWFOCw=="
+        length="16028466"
+        type="application/octet-stream"
+      />
+    </item>
+    <item>
       <title>Version 0.2.2</title>
       <sparkle:version>0.2.2</sparkle:version>
       <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
